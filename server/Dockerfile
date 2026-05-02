@@ -16,6 +16,7 @@ RUN addgroup -g 1001 appgroup && \
 COPY --from=builder /app/node_modules ./node_modules
 COPY package.json ./
 COPY index.js ./
+COPY db.js ./
 
 # Switch to non-root user
 USER appuser
