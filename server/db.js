@@ -1,168 +1,187 @@
-const Database = require('better-sqlite3');
-const path = require('path');
+const mysql = require('mysql2/promise');
 
-const DB_PATH = path.join(__dirname, 'game_stats.db');
+// 数据库配置：优先使用 Railway MySQL 环境变量
+const dbConfig = {
+  host: process.env.MYSQLHOST || process.env.DB_HOST || 'localhost',
+  port: process.env.MYSQLPORT || process.env.DB_PORT || 3306,
+  user: process.env.MYSQLUSER || process.env.DB_USER || 'root',
+  password: process.env.MYSQLPASSWORD || process.env.DB_PASSWORD || '',
+  database: process.env.MYSQLDATABASE || process.env.DB_NAME || 'hero_fighter',
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
+};
 
-let db;
+let pool;
 
-function getDb() {
-  if (!db) {
-    db = new Database(DB_PATH);
-    db.pragma('journal_mode = WAL');
-    db.pragma('foreign_keys = ON');
-    initTables();
+async function getDb() {
+  if (!pool) {
+    pool = mysql.createPool(dbConfig);
+    await initTables();
   }
-  return db;
+  return pool;
 }
 
-function initTables() {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS players (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL DEFAULT 'Player',
-      total_wins INTEGER NOT NULL DEFAULT 0,
-      total_losses INTEGER NOT NULL DEFAULT 0,
-      total_draws INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      last_played_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
+async function initTables() {
+  const conn = await pool.getConnection();
+  try {
+    // 玩家表
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS players (
+        id VARCHAR(255) PRIMARY KEY,
+        name VARCHAR(255) NOT NULL DEFAULT 'Player',
+        total_wins INT NOT NULL DEFAULT 0,
+        total_losses INT NOT NULL DEFAULT 0,
+        total_draws INT NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_played_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
 
-    CREATE TABLE IF NOT EXISTS hero_stats (
-      player_id TEXT NOT NULL,
-      hero_id TEXT NOT NULL,
-      wins INTEGER NOT NULL DEFAULT 0,
-      losses INTEGER NOT NULL DEFAULT 0,
-      PRIMARY KEY (player_id, hero_id),
-      FOREIGN KEY (player_id) REFERENCES players(id)
-    );
+    // 英雄统计表
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS hero_stats (
+        player_id VARCHAR(255) NOT NULL,
+        hero_id VARCHAR(255) NOT NULL,
+        wins INT NOT NULL DEFAULT 0,
+        losses INT NOT NULL DEFAULT 0,
+        PRIMARY KEY (player_id, hero_id),
+        FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE
+      )
+    `);
 
-    CREATE TABLE IF NOT EXISTS game_history (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      room_id TEXT NOT NULL,
-      player1_id TEXT NOT NULL,
-      player2_id TEXT NOT NULL,
-      player1_hero TEXT NOT NULL,
-      player2_hero TEXT NOT NULL,
-      winner_id TEXT,
-      result TEXT NOT NULL,
-      played_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
+    // 游戏历史表
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS game_history (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        room_id VARCHAR(255) NOT NULL,
+        player1_id VARCHAR(255) NOT NULL,
+        player2_id VARCHAR(255) NOT NULL,
+        player1_hero VARCHAR(255) NOT NULL,
+        player2_hero VARCHAR(255) NOT NULL,
+        winner_id VARCHAR(255),
+        result VARCHAR(50) NOT NULL,
+        played_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
 
-    CREATE INDEX IF NOT EXISTS idx_hero_stats_player ON hero_stats(player_id);
-    CREATE INDEX IF NOT EXISTS idx_game_history_player1 ON game_history(player1_id);
-    CREATE INDEX IF NOT EXISTS idx_game_history_player2 ON game_history(player2_id);
-    CREATE INDEX IF NOT EXISTS idx_game_history_played ON game_history(played_at);
-  `);
+    // 创建索引
+    await conn.execute(`CREATE INDEX IF NOT EXISTS idx_hero_stats_player ON hero_stats(player_id)`);
+    await conn.execute(`CREATE INDEX IF NOT EXISTS idx_game_history_player1 ON game_history(player1_id)`);
+    await conn.execute(`CREATE INDEX IF NOT EXISTS idx_game_history_player2 ON game_history(player2_id)`);
+    await conn.execute(`CREATE INDEX IF NOT EXISTS idx_game_history_played ON game_history(played_at)`);
+  } finally {
+    conn.release();
+  }
 }
 
 // --- Player Operations ---
 
-function getOrCreatePlayer(playerId, name) {
-  const d = getDb();
-  const existing = d.prepare('SELECT * FROM players WHERE id = ?').get(playerId);
-  if (existing) {
-    if (name && name !== existing.name) {
-      d.prepare('UPDATE players SET name = ? WHERE id = ?').run(name, playerId);
+async function getOrCreatePlayer(playerId, name) {
+  const db = await getDb();
+  const [rows] = await db.execute('SELECT * FROM players WHERE id = ?', [playerId]);
+  
+  if (rows.length > 0) {
+    const player = rows[0];
+    if (name && name !== player.name) {
+      await db.execute('UPDATE players SET name = ? WHERE id = ?', [name, playerId]);
+      player.name = name;
     }
-    return existing;
+    return player;
   }
-  d.prepare('INSERT INTO players (id, name) VALUES (?, ?)').run(playerId, name || 'Player');
-  return d.prepare('SELECT * FROM players WHERE id = ?').get(playerId);
+  
+  await db.execute('INSERT INTO players (id, name) VALUES (?, ?)', [playerId, name || 'Player']);
+  const [newRows] = await db.execute('SELECT * FROM players WHERE id = ?', [playerId]);
+  return newRows[0];
 }
 
 // --- Record Game Result ---
 
-const recordGameStmt = {
-  updatePlayerWin: null,
-  updatePlayerLoss: null,
-  updatePlayerDraw: null,
-  updateHeroWin: null,
-  updateHeroLoss: null,
-  insertHistory: null,
-};
-
-function prepareStatements() {
-  const d = getDb();
-  recordGameStmt.updatePlayerWin = d.prepare(
-    'UPDATE players SET total_wins = total_wins + 1, last_played_at = datetime(\'now\') WHERE id = ?'
-  );
-  recordGameStmt.updatePlayerLoss = d.prepare(
-    'UPDATE players SET total_losses = total_losses + 1, last_played_at = datetime(\'now\') WHERE id = ?'
-  );
-  recordGameStmt.updatePlayerDraw = d.prepare(
-    'UPDATE players SET total_draws = total_draws + 1, last_played_at = datetime(\'now\') WHERE id = ?'
-  );
-  recordGameStmt.upsertHeroWin = d.prepare(`
-    INSERT INTO hero_stats (player_id, hero_id, wins, losses) VALUES (?, ?, 1, 0)
-    ON CONFLICT(player_id, hero_id) DO UPDATE SET wins = wins + 1
-  `);
-  recordGameStmt.upsertHeroLoss = d.prepare(`
-    INSERT INTO hero_stats (player_id, hero_id, wins, losses) VALUES (?, ?, 0, 1)
-    ON CONFLICT(player_id, hero_id) DO UPDATE SET losses = losses + 1
-  `);
-  recordGameStmt.insertHistory = d.prepare(`
-    INSERT INTO game_history (room_id, player1_id, player2_id, player1_hero, player2_hero, winner_id, result)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `);
-}
-
-/**
- * Record a completed game.
- * @param {object} params
- * @param {string} params.roomId
- * @param {string} params.player1Id
- * @param {string} params.player2Id
- * @param {string} params.player1Hero
- * @param {string} params.player2Hero
- * @param {string|null} params.winnerId - null for draw
- * @param {string} params.player1Name
- * @param {string} params.player2Name
- */
-function recordGame({ roomId, player1Id, player2Id, player1Hero, player2Hero, winnerId, player1Name, player2Name }) {
-  const d = getDb();
-  if (!recordGameStmt.updatePlayerWin) prepareStatements();
-
-  const record = d.transaction(() => {
-    // Ensure players exist
-    getOrCreatePlayer(player1Id, player1Name);
-    getOrCreatePlayer(player2Id, player2Name);
-
+async function recordGame({ roomId, player1Id, player2Id, player1Hero, player2Hero, winnerId, player1Name, player2Name }) {
+  const db = await getDb();
+  const conn = await db.getConnection();
+  
+  try {
+    await conn.beginTransaction();
+    
+    // 确保玩家存在
+    await getOrCreatePlayer(player1Id, player1Name);
+    await getOrCreatePlayer(player2Id, player2Name);
+    
     if (winnerId === null || winnerId === undefined) {
-      recordGameStmt.updatePlayerDraw.run(player1Id);
-      recordGameStmt.updatePlayerDraw.run(player2Id);
-      d.prepare(`INSERT INTO hero_stats (player_id, hero_id, wins, losses) VALUES (?, ?, 0, 0)
-        ON CONFLICT(player_id, hero_id) DO UPDATE SET wins = wins`).run(player1Id, player1Hero);
-      d.prepare(`INSERT INTO hero_stats (player_id, hero_id, wins, losses) VALUES (?, ?, 0, 0)
-        ON CONFLICT(player_id, hero_id) DO UPDATE SET wins = wins`).run(player2Id, player2Hero);
-      recordGameStmt.insertHistory.run(roomId, player1Id, player2Id, player1Hero, player2Hero, null, 'draw');
+      // 平局
+      await conn.execute('UPDATE players SET total_draws = total_draws + 1 WHERE id IN (?, ?)', [player1Id, player2Id]);
+      await conn.execute(`
+        INSERT INTO hero_stats (player_id, hero_id, wins, losses) VALUES (?, ?, 0, 0)
+        ON DUPLICATE KEY UPDATE wins = wins
+      `, [player1Id, player1Hero]);
+      await conn.execute(`
+        INSERT INTO hero_stats (player_id, hero_id, wins, losses) VALUES (?, ?, 0, 0)
+        ON DUPLICATE KEY UPDATE wins = wins
+      `, [player2Id, player2Hero]);
+      await conn.execute(`
+        INSERT INTO game_history (room_id, player1_id, player2_id, player1_hero, player2_hero, winner_id, result)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `, [roomId, player1Id, player2Id, player1Hero, player2Hero, null, 'draw']);
     } else if (winnerId === player1Id) {
-      recordGameStmt.updatePlayerWin.run(player1Id);
-      recordGameStmt.updatePlayerLoss.run(player2Id);
-      recordGameStmt.upsertHeroWin.run(player1Id, player1Hero);
-      recordGameStmt.upsertHeroLoss.run(player2Id, player2Hero);
-      recordGameStmt.insertHistory.run(roomId, player1Id, player2Id, player1Hero, player2Hero, winnerId, 'p1_win');
+      // 玩家1获胜
+      await conn.execute('UPDATE players SET total_wins = total_wins + 1 WHERE id = ?', [player1Id]);
+      await conn.execute('UPDATE players SET total_losses = total_losses + 1 WHERE id = ?', [player2Id]);
+      await conn.execute(`
+        INSERT INTO hero_stats (player_id, hero_id, wins, losses) VALUES (?, ?, 1, 0)
+        ON DUPLICATE KEY UPDATE wins = wins + 1
+      `, [player1Id, player1Hero]);
+      await conn.execute(`
+        INSERT INTO hero_stats (player_id, hero_id, wins, losses) VALUES (?, ?, 0, 1)
+        ON DUPLICATE KEY UPDATE losses = losses + 1
+      `, [player2Id, player2Hero]);
+      await conn.execute(`
+        INSERT INTO game_history (room_id, player1_id, player2_id, player1_hero, player2_hero, winner_id, result)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `, [roomId, player1Id, player2Id, player1Hero, player2Hero, winnerId, 'p1_win']);
     } else {
-      recordGameStmt.updatePlayerWin.run(player2Id);
-      recordGameStmt.updatePlayerLoss.run(player1Id);
-      recordGameStmt.upsertHeroWin.run(player2Id, player2Hero);
-      recordGameStmt.upsertHeroLoss.run(player1Id, player1Hero);
-      recordGameStmt.insertHistory.run(roomId, player1Id, player2Id, player1Hero, player2Hero, winnerId, 'p2_win');
+      // 玩家2获胜
+      await conn.execute('UPDATE players SET total_wins = total_wins + 1 WHERE id = ?', [player2Id]);
+      await conn.execute('UPDATE players SET total_losses = total_losses + 1 WHERE id = ?', [player1Id]);
+      await conn.execute(`
+        INSERT INTO hero_stats (player_id, hero_id, wins, losses) VALUES (?, ?, 1, 0)
+        ON DUPLICATE KEY UPDATE wins = wins + 1
+      `, [player2Id, player2Hero]);
+      await conn.execute(`
+        INSERT INTO hero_stats (player_id, hero_id, wins, losses) VALUES (?, ?, 0, 1)
+        ON DUPLICATE KEY UPDATE losses = losses + 1
+      `, [player1Id, player1Hero]);
+      await conn.execute(`
+        INSERT INTO game_history (room_id, player1_id, player2_id, player1_hero, player2_hero, winner_id, result)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `, [roomId, player1Id, player2Id, player1Hero, player2Hero, winnerId, 'p2_win']);
     }
-  });
-
-  record();
+    
+    await conn.commit();
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
 }
 
 // --- Query Stats ---
 
-function getPlayerStats(playerId) {
-  const d = getDb();
-  const player = d.prepare('SELECT * FROM players WHERE id = ?').get(playerId);
-  if (!player) return null;
-
-  const heroStats = d.prepare('SELECT * FROM hero_stats WHERE player_id = ? ORDER BY (wins + losses) DESC').all(playerId);
+async function getPlayerStats(playerId) {
+  const db = await getDb();
+  const [players] = await db.execute('SELECT * FROM players WHERE id = ?', [playerId]);
+  
+  if (players.length === 0) return null;
+  const player = players[0];
+  
+  const [heroStats] = await db.execute(
+    'SELECT * FROM hero_stats WHERE player_id = ? ORDER BY (wins + losses) DESC',
+    [playerId]
+  );
+  
   const totalGames = player.total_wins + player.total_losses + player.total_draws;
-
+  
   return {
     playerId: player.id,
     name: player.name,
@@ -182,21 +201,23 @@ function getPlayerStats(playerId) {
       winRate: (h.wins + h.losses) > 0 ? h.wins / (h.wins + h.losses) : 0,
     })),
     canShowTopHeroes: totalGames >= 20,
-    topHeroes: getTopHeroes(playerId),
+    topHeroes: await getTopHeroes(playerId),
     lastPlayedAt: player.last_played_at,
   };
 }
 
-function getTopHeroes(playerId, count = 3, minGames = 3) {
-  const d = getDb();
-  return d.prepare(`
+async function getTopHeroes(playerId, count = 3, minGames = 3) {
+  const db = await getDb();
+  const [rows] = await db.execute(`
     SELECT hero_id, wins, losses, (wins + losses) as total_games,
-           CAST(wins AS REAL) / (wins + losses) as win_rate
+           CAST(wins AS DECIMAL) / (wins + losses) as win_rate
     FROM hero_stats
     WHERE player_id = ? AND (wins + losses) >= ?
     ORDER BY win_rate DESC, total_games DESC
     LIMIT ?
-  `).all(playerId, minGames, count).map(h => ({
+  `, [playerId, minGames, count]);
+  
+  return rows.map(h => ({
     heroId: h.hero_id,
     wins: h.wins,
     losses: h.losses,
@@ -205,19 +226,21 @@ function getTopHeroes(playerId, count = 3, minGames = 3) {
   }));
 }
 
-function getLeaderboard(limit = 20) {
-  const d = getDb();
-  return d.prepare(`
+async function getLeaderboard(limit = 20) {
+  const db = await getDb();
+  const [rows] = await db.execute(`
     SELECT id, name, total_wins, total_losses, total_draws,
            (total_wins + total_losses + total_draws) as total_games,
            CASE WHEN (total_wins + total_losses) > 0
-             THEN CAST(total_wins AS REAL) / (total_wins + total_losses)
+             THEN CAST(total_wins AS DECIMAL) / (total_wins + total_losses)
              ELSE 0 END as win_rate
     FROM players
     WHERE (total_wins + total_losses + total_draws) >= 5
     ORDER BY win_rate DESC, total_wins DESC
     LIMIT ?
-  `).all(limit).map(p => ({
+  `, [limit]);
+  
+  return rows.map(p => ({
     playerId: p.id,
     name: p.name,
     displayName: `${p.name}#${p.id.slice(-4)}`,
@@ -229,14 +252,15 @@ function getLeaderboard(limit = 20) {
   }));
 }
 
-function getRecentGames(playerId, limit = 10) {
-  const d = getDb();
-  return d.prepare(`
+async function getRecentGames(playerId, limit = 10) {
+  const db = await getDb();
+  const [rows] = await db.execute(`
     SELECT * FROM game_history
     WHERE player1_id = ? OR player2_id = ?
     ORDER BY played_at DESC
     LIMIT ?
-  `).all(playerId, playerId, limit);
+  `, [playerId, playerId, limit]);
+  return rows;
 }
 
 module.exports = {

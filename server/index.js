@@ -23,9 +23,9 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', rooms: rooms.size, clients: clients.size, queue: matchmakingQueue.length });
 });
 
-app.get('/api/stats/:playerId', (req, res) => {
+app.get('/api/stats/:playerId', async (req, res) => {
   try {
-    const stats = db.getPlayerStats(req.params.playerId);
+    const stats = await db.getPlayerStats(req.params.playerId);
     if (!stats) return res.status(404).json({ error: 'Player not found' });
     res.json(stats);
   } catch (e) {
@@ -33,19 +33,19 @@ app.get('/api/stats/:playerId', (req, res) => {
   }
 });
 
-app.get('/api/leaderboard', (req, res) => {
+app.get('/api/leaderboard', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 20;
-    res.json(db.getLeaderboard(limit));
+    res.json(await db.getLeaderboard(limit));
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-app.get('/api/recent/:playerId', (req, res) => {
+app.get('/api/recent/:playerId', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 10;
-    res.json(db.getRecentGames(req.params.playerId, limit));
+    res.json(await db.getRecentGames(req.params.playerId, limit));
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -197,7 +197,7 @@ function handleMessage(ws, client, msg) {
       if (msg.deviceId) {
         client.deviceId = msg.deviceId;
         client.nickname = msg.nickname || 'Player';
-        db.getOrCreatePlayer(msg.deviceId, msg.nickname || 'Player');
+        db.getOrCreatePlayer(msg.deviceId, msg.nickname || 'Player').catch(() => {});
       }
       break;
     }
@@ -318,21 +318,20 @@ function handleMessage(ws, client, msg) {
         const c2 = ws2 ? clients.get(ws2) : null;
         const d1 = c1?.deviceId || p1.clientId;
         const d2 = c2?.deviceId || p2.clientId;
-        try {
-          db.recordGame({
-            roomId: room.id,
-            player1Id: d1,
-            player2Id: d2,
-            player1Hero: p1.heroId || 'unknown',
-            player2Hero: p2.heroId || 'unknown',
-            winnerId: msg.winnerId === p1.clientId ? d1 : msg.winnerId === p2.clientId ? d2 : null,
-            player1Name: p1.name || 'Player 1',
-            player2Name: p2.name || 'Player 2',
-          });
+        db.recordGame({
+          roomId: room.id,
+          player1Id: d1,
+          player2Id: d2,
+          player1Hero: p1.heroId || 'unknown',
+          player2Hero: p2.heroId || 'unknown',
+          winnerId: msg.winnerId === p1.clientId ? d1 : msg.winnerId === p2.clientId ? d2 : null,
+          player1Name: p1.name || 'Player 1',
+          player2Name: p2.name || 'Player 2',
+        }).then(() => {
           console.log(`Game recorded: ${d1} vs ${d2}`);
-        } catch (e) {
+        }).catch((e) => {
           console.error('Failed to record game:', e.message);
-        }
+        });
       }
 
       setTimeout(() => {
