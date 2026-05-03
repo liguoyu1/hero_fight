@@ -1,12 +1,13 @@
 const mysql = require('mysql2/promise');
 
 // 数据库配置：优先使用 Railway MySQL 环境变量
+const isRailway = !!(process.env.MYSQLHOST || process.env.MYSQLHOST);
 const dbConfig = {
   host: process.env.MYSQLHOST || process.env.DB_HOST || 'localhost',
-  port: process.env.MYSQLPORT || process.env.DB_PORT || 3306,
+  port: parseInt(process.env.MYSQLPORT || process.env.DB_PORT || '3306'),
   user: process.env.MYSQLUSER || process.env.DB_USER || 'root',
   password: process.env.MYSQLPASSWORD || process.env.DB_PASSWORD || '',
-  database: process.env.MYSQLDATABASE || process.env.DB_NAME || 'hero_fighter',
+  database: process.env.MYSQLDATABASE || process.env.DB_NAME || (isRailway ? 'railway' : 'hero_fighter'),
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
