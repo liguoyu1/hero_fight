@@ -52,6 +52,36 @@ app.get('/api/recent/:playerId', async (req, res) => {
   }
 });
 
+// 接收客户端发送的游戏记录（AI/本地模式）
+app.post('/api/game_record', async (req, res) => {
+  try {
+    const { player1Id, player2Id, player1Hero, player2Hero, winnerId, player1Name, player2Name, gameMode } = req.body;
+    
+    if (!player1Id || !player2Id) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    
+    const roomId = `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    await db.recordGame({
+      roomId,
+      player1Id,
+      player2Id,
+      player1Hero: player1Hero || 'unknown',
+      player2Hero: player2Hero || 'unknown',
+      winnerId,
+      player1Name: player1Name || 'Player 1',
+      player2Name: player2Name || 'Player 2',
+      gameMode: gameMode || 'local',
+    });
+    
+    res.json({ success: true });
+  } catch (e) {
+    console.error('Failed to save game record:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 const rooms = new Map();
 const clients = new Map();
 const wsById = new Map(); // clientId -> ws (reverse lookup)
@@ -323,6 +353,10 @@ function handleMessage(ws, client, msg) {
         const c2 = ws2 ? clients.get(ws2) : null;
         const d1 = c1?.deviceId || p1.clientId;
         const d2 = c2?.deviceId || p2.clientId;
+        
+        // 获取游戏模式（从消息中获取，默认为 online）
+        const gameMode = msg.gameMode || 'online';
+        
         db.recordGame({
           roomId: room.id,
           player1Id: d1,
@@ -332,8 +366,9 @@ function handleMessage(ws, client, msg) {
           winnerId: msg.winnerId === p1.clientId ? d1 : msg.winnerId === p2.clientId ? d2 : null,
           player1Name: p1.name || 'Player 1',
           player2Name: p2.name || 'Player 2',
+          gameMode: gameMode,
         }).then(() => {
-          console.log(`Game recorded: ${d1} vs ${d2}`);
+          console.log(`Game recorded (${gameMode}): ${d1} vs ${d2}`);
         }).catch((e) => {
           console.error('Failed to record game:', e.message);
         });

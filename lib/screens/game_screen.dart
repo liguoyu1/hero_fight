@@ -1,13 +1,18 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flame/game.dart' show GameWidget;
+import 'package:http/http.dart' as http;
 
 import '../game/fighter_game.dart';
 import '../game/ai/ai_controller.dart';
 import '../game/network/rollback_engine.dart';
 import '../game/components/fighter.dart';
 import '../network/network_manager.dart';
+import '../network/game_client.dart';
+import '../data/device_id.dart';
+import '../data/nickname.dart';
 import '../i18n/app_localizations.dart';
 
 /// Flutter screen that hosts the Flame [FighterGame] instance.
@@ -86,6 +91,16 @@ class _GameScreenState extends State<GameScreen> {
     // Set up network sync for online/lan mode
     if ((widget.mode == 'online' || widget.mode == 'lan') && widget.network != null) {
       _setupNetworkSync();
+    }
+
+    // Listen for game state changes to save records (AI/local mode)
+    _game.onGameStateChanged = _onGameStateChanged;
+  }
+
+  void _onGameStateChanged(GameState newState) {
+    if (newState == GameState.result) {
+      // Game ended, save record for AI/local mode
+      _saveGameRecord();
     }
   }
 
@@ -195,6 +210,58 @@ class _GameScreenState extends State<GameScreen> {
   void _restartGame() {
     _game.resetRound();
     _focusNode.requestFocus();
+  }
+
+  /// 保存游戏记录到服务器（AI/本地模式）
+  Future<void> _saveGameRecord() async {
+    // 只在 AI 或本地 2P 模式保存
+    if (widget.mode != 'ai' && widget.mode != 'local') return;
+    
+    final winnerName = _game.winnerName;
+    if (winnerName == null) return;
+    
+    try {
+      final deviceId = await getDeviceId();
+      final nickname = await getNickname() ?? 'Player';
+      
+      // 确定胜负
+      String? winnerId;
+      String player1Id = deviceId;
+      String player2Id = widget.mode == 'local' ? 'local_p2_$deviceId' : 'ai_$deviceId';
+      String player1Name = nickname;
+      String player2Name = widget.mode == 'local' ? 'Player 2' : 'AI';
+      
+      if (winnerName.contains(nickname) || winnerName.contains('Player 1')) {
+        winnerId = player1Id;
+      } else if (!winnerName.contains('Draw')) {
+        winnerId = player2Id;
+      }
+      
+      // 发送游戏记录到服务器（使用 HTTP POST）
+      final url = Uri.parse('${AppConfig.apiBaseUrl}/api/game_record');
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'player1Id': player1Id,
+          'player2Id': player2Id,
+          'player1Hero': widget.hero1Id,
+          'player2Hero': widget.hero2Id,
+          'winnerId': winnerId,
+          'player1Name': player1Name,
+          'player2Name': player2Name,
+          'gameMode': widget.mode,
+        }),
+      );
+      
+      if (response.statusCode == 200) {
+        print('Game record saved: $winnerName');
+      } else {
+        print('Failed to save game record: ${response.body}');
+      }
+    } catch (e) {
+      print('Failed to save game record: $e');
+    }
   }
 
   @override

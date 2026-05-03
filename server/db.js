@@ -62,6 +62,7 @@ async function initTables() {
         player2_hero VARCHAR(255) NOT NULL,
         winner_id VARCHAR(255),
         result VARCHAR(50) NOT NULL,
+        game_mode VARCHAR(50) DEFAULT 'online',
         played_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
@@ -98,7 +99,7 @@ async function getOrCreatePlayer(playerId, name) {
 
 // --- Record Game Result ---
 
-async function recordGame({ roomId, player1Id, player2Id, player1Hero, player2Hero, winnerId, player1Name, player2Name }) {
+async function recordGame({ roomId, player1Id, player2Id, player1Hero, player2Hero, winnerId, player1Name, player2Name, gameMode = 'online' }) {
   const db = await getDb();
   const conn = await db.getConnection();
   
@@ -109,54 +110,63 @@ async function recordGame({ roomId, player1Id, player2Id, player1Hero, player2He
     await getOrCreatePlayer(player1Id, player1Name);
     await getOrCreatePlayer(player2Id, player2Name);
     
-    if (winnerId === null || winnerId === undefined) {
-      // 平局
-      await conn.execute('UPDATE players SET total_draws = total_draws + 1 WHERE id IN (?, ?)', [player1Id, player2Id]);
-      await conn.execute(`
-        INSERT INTO hero_stats (player_id, hero_id, wins, losses) VALUES (?, ?, 0, 0)
-        ON DUPLICATE KEY UPDATE wins = wins
-      `, [player1Id, player1Hero]);
-      await conn.execute(`
-        INSERT INTO hero_stats (player_id, hero_id, wins, losses) VALUES (?, ?, 0, 0)
-        ON DUPLICATE KEY UPDATE wins = wins
-      `, [player2Id, player2Hero]);
-      await conn.execute(`
-        INSERT INTO game_history (room_id, player1_id, player2_id, player1_hero, player2_hero, winner_id, result)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `, [roomId, player1Id, player2Id, player1Hero, player2Hero, null, 'draw']);
-    } else if (winnerId === player1Id) {
-      // 玩家1获胜
-      await conn.execute('UPDATE players SET total_wins = total_wins + 1 WHERE id = ?', [player1Id]);
-      await conn.execute('UPDATE players SET total_losses = total_losses + 1 WHERE id = ?', [player2Id]);
-      await conn.execute(`
-        INSERT INTO hero_stats (player_id, hero_id, wins, losses) VALUES (?, ?, 1, 0)
-        ON DUPLICATE KEY UPDATE wins = wins + 1
-      `, [player1Id, player1Hero]);
-      await conn.execute(`
-        INSERT INTO hero_stats (player_id, hero_id, wins, losses) VALUES (?, ?, 0, 1)
-        ON DUPLICATE KEY UPDATE losses = losses + 1
-      `, [player2Id, player2Hero]);
-      await conn.execute(`
-        INSERT INTO game_history (room_id, player1_id, player2_id, player1_hero, player2_hero, winner_id, result)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `, [roomId, player1Id, player2Id, player1Hero, player2Hero, winnerId, 'p1_win']);
-    } else {
-      // 玩家2获胜
-      await conn.execute('UPDATE players SET total_wins = total_wins + 1 WHERE id = ?', [player2Id]);
-      await conn.execute('UPDATE players SET total_losses = total_losses + 1 WHERE id = ?', [player1Id]);
-      await conn.execute(`
-        INSERT INTO hero_stats (player_id, hero_id, wins, losses) VALUES (?, ?, 1, 0)
-        ON DUPLICATE KEY UPDATE wins = wins + 1
-      `, [player2Id, player2Hero]);
-      await conn.execute(`
-        INSERT INTO hero_stats (player_id, hero_id, wins, losses) VALUES (?, ?, 0, 1)
-        ON DUPLICATE KEY UPDATE losses = losses + 1
-      `, [player1Id, player1Hero]);
-      await conn.execute(`
-        INSERT INTO game_history (room_id, player1_id, player2_id, player1_hero, player2_hero, winner_id, result)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `, [roomId, player1Id, player2Id, player1Hero, player2Hero, winnerId, 'p2_win']);
+    // 只有在线对战才更新统计数据
+    if (gameMode === 'online') {
+      if (winnerId === null || winnerId === undefined) {
+        // 平局
+        await conn.execute('UPDATE players SET total_draws = total_draws + 1 WHERE id IN (?, ?)', [player1Id, player2Id]);
+      } else if (winnerId === player1Id) {
+        // 玩家1获胜
+        await conn.execute('UPDATE players SET total_wins = total_wins + 1 WHERE id = ?', [player1Id]);
+        await conn.execute('UPDATE players SET total_losses = total_losses + 1 WHERE id = ?', [player2Id]);
+      } else {
+        // 玩家2获胜
+        await conn.execute('UPDATE players SET total_wins = total_wins + 1 WHERE id = ?', [player2Id]);
+        await conn.execute('UPDATE players SET total_losses = total_losses + 1 WHERE id = ?', [player1Id]);
+      }
+      
+      // 更新英雄统计数据（仅在线模式）
+      if (winnerId === null || winnerId === undefined) {
+        await conn.execute(`
+          INSERT INTO hero_stats (player_id, hero_id, wins, losses) VALUES (?, ?, 0, 0)
+          ON DUPLICATE KEY UPDATE wins = wins
+        `, [player1Id, player1Hero]);
+        await conn.execute(`
+          INSERT INTO hero_stats (player_id, hero_id, wins, losses) VALUES (?, ?, 0, 0)
+          ON DUPLICATE KEY UPDATE wins = wins
+        `, [player2Id, player2Hero]);
+      } else if (winnerId === player1Id) {
+        await conn.execute(`
+          INSERT INTO hero_stats (player_id, hero_id, wins, losses) VALUES (?, ?, 1, 0)
+          ON DUPLICATE KEY UPDATE wins = wins + 1
+        `, [player1Id, player1Hero]);
+        await conn.execute(`
+          INSERT INTO hero_stats (player_id, hero_id, wins, losses) VALUES (?, ?, 0, 1)
+          ON DUPLICATE KEY UPDATE losses = losses + 1
+        `, [player2Id, player2Hero]);
+      } else {
+        await conn.execute(`
+          INSERT INTO hero_stats (player_id, hero_id, wins, losses) VALUES (?, ?, 1, 0)
+          ON DUPLICATE KEY UPDATE wins = wins + 1
+        `, [player2Id, player2Hero]);
+        await conn.execute(`
+          INSERT INTO hero_stats (player_id, hero_id, wins, losses) VALUES (?, ?, 0, 1)
+          ON DUPLICATE KEY UPDATE losses = losses + 1
+        `, [player1Id, player1Hero]);
+      }
     }
+    
+    // 记录游戏历史（所有模式都记录）
+    const result = winnerId === null || winnerId === undefined 
+      ? 'draw' 
+      : winnerId === player1Id 
+        ? 'p1_win' 
+        : 'p2_win';
+    
+    await conn.execute(`
+      INSERT INTO game_history (room_id, player1_id, player2_id, player1_hero, player2_hero, winner_id, result, game_mode)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `, [roomId, player1Id, player2Id, player1Hero, player2Hero, winnerId, result, gameMode]);
     
     await conn.commit();
   } catch (err) {

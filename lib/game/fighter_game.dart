@@ -52,6 +52,9 @@ class FighterGame extends FlameGame
   // External callback for AI updates
   void Function(double dt)? onExternalUpdate;
 
+  // Callback when game state changes (for saving records)
+  void Function(GameState newState)? onGameStateChanged;
+
   // Network remote input storage (for online/lan mode)
   final FighterInput _remoteInput = FighterInput();
   bool _hasRemoteInput = false;
@@ -585,6 +588,9 @@ class FighterGame extends FlameGame
       }
     }
     SoundManager().playWin();
+    
+    // Notify listeners that game state changed
+    onGameStateChanged?.call(gameState);
   }
 
   void resetRound() {
