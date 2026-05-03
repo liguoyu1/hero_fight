@@ -1,0 +1,79 @@
+{
+  "id": "mohist",
+  "name": "墨家机关师",
+  "nameEn": "Mohist Engineer",
+  "title": "天工巧匠",
+  "titleEn": "Master of Machines",
+  "faction": "warStates",
+  "colorValue": 4292337698,
+  "skillName": "天工炮",
+  "skillNameEn": "Tiangong Cannon",
+  "skillDesc": "蓄力0.5秒后发射光束，造成280点伤害",
+  "skillDescEn": "Charge 0.5s then fire a beam dealing 280 damage",
+  "hp": 920,
+  "speed": 165,
+  "jumpForce": 340,
+  "attackPower": 45,
+  "defense": 24,
+  "skillCooldown": 8.0,
+  "skillDamage": 260,
+  "visuals": {
+    "bodyType": "normal",
+    "headRadius": 10,
+    "torsoWidth": 24,
+    "torsoHeight": 22,
+    "armLength": 20,
+    "armWidth": 6,
+    "legLength": 22,
+    "legWidth": 6,
+    "secondaryColor": 4292336608,
+    "skinColor": 4291642658,
+    "hasHelmet": true
+  },
+  "normalAttack": {
+    "damageMultiplier": 0.9,
+    "range": 60,
+    "hitboxHeightRatio": 0.85,
+    "duration": 0.22,
+    "knockbackX": 175,
+    "knockbackY": -85,
+    "lungeSpeed": 85,
+    "maxComboHits": 1,
+    "comboMultipliers": [1.0]
+  },
+  "directionalAttacks": [
+    {
+      "direction": "forward",
+      "damage": 1.3,
+      "range": 100,
+      "hitboxHeight": 20,
+      "duration": 0.2,
+      "knockbackX": 220,
+      "knockbackY": -50,
+      "label": "Crossbow Bolt"
+    },
+    {
+      "direction": "up",
+      "damage": 1.1,
+      "range": 50,
+      "hitboxHeight": 110,
+      "duration": 0.22,
+      "knockbackX": 80,
+      "knockbackY": -320,
+      "label": "Sky Arrow"
+    },
+    {
+      "direction": "down",
+      "damage": 1.0,
+      "range": 65,
+      "hitboxHeight": 35,
+      "duration": 0.25,
+      "knockbackX": 150,
+      "knockbackY": 180,
+      "label": "Ground Fire"
+    }
+  ],
+  "skillType": "projectile",
+  "skillProjectileCount": 1,
+  "skillProjectileDamage": 260
+}

@@ -1,0 +1,70 @@
+{
+  "id": "shield_general",
+  "name": "盾卫将军",
+  "nameEn": "Shield General",
+  "title": "铁壁",
+  "titleEn": "Iron Wall",
+  "faction": "warStates",
+  "colorValue": 4280422218,
+  "skillName": "盾投",
+  "skillNameEn": "Shield Toss",
+  "skillDesc": "投掷盾牌弹跳3次，每次造成150点伤害",
+  "skillDescEn": "Throw shield that bounces 3 times, dealing 150 damage per hit",
+  "hp": 1200,
+  "speed": 140,
+  "jumpForce": 330,
+  "attackPower": 42,
+  "defense": 38,
+  "skillCooldown": 6.0,
+  "skillDamage": 150,
+  "visuals": {
+    "bodyType": "heavy",
+    "headRadius": 10,
+    "torsoWidth": 26,
+    "torsoHeight": 22,
+    "armLength": 21,
+    "armWidth": 6,
+    "legLength": 21,
+    "legWidth": 7,
+    "secondaryColor": 4280396970,
+    "skinColor": 4294920108,
+    "hasHelmet": true,
+    "hasShield": true
+  },
+  "normalAttack": {
+    "damageMultiplier": 1.0,
+    "range": 68,
+    "hitboxHeightRatio": 1.0,
+    "duration": 0.32,
+    "knockbackX": 200,
+    "knockbackY": -90,
+    "lungeSpeed": 75,
+    "maxComboHits": 2,
+    "comboMultipliers": [1.0, 1.1]
+  },
+  "directionalAttacks": [
+    {
+      "direction": "forward",
+      "damage": 1.2,
+      "range": 85,
+      "hitboxHeight": 75,
+      "duration": 0.3,
+      "knockbackX": 280,
+      "knockbackY": -60,
+      "label": "Shield Charge"
+    },
+    {
+      "direction": "backward",
+      "damage": 0.9,
+      "range": 55,
+      "hitboxHeight": 70,
+      "duration": 0.28,
+      "knockbackX": 180,
+      "knockbackY": -120,
+      "label": "Counter Shield"
+    }
+  ],
+  "skillType": "projectile",
+  "skillProjectileCount": 1,
+  "skillProjectileDamage": 150
+}

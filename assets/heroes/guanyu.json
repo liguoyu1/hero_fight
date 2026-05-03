@@ -1,0 +1,71 @@
+{
+  "id": "guanyu",
+  "name": "关羽",
+  "nameEn": "Guan Yu",
+  "title": "武圣",
+  "titleEn": "The God of War",
+  "faction": "threeKingdoms",
+  "colorValue": 4280431138,
+  "skillName": "青龙偃月",
+  "skillNameEn": "Green Dragon Crescent",
+  "skillDesc": "向前冲刺并挥出一刀，造成280点伤害和巨大击退",
+  "skillDescEn": "Dash forward and slash, dealing 280 damage with huge knockback",
+  "hp": 1080,
+  "speed": 155,
+  "jumpForce": 320,
+  "attackPower": 50,
+  "defense": 28,
+  "skillCooldown": 10.0,
+  "skillDamage": 280,
+  "visuals": {
+    "bodyType": "heavy",
+    "headRadius": 11,
+    "torsoWidth": 28,
+    "torsoHeight": 23,
+    "armLength": 22,
+    "armWidth": 6,
+    "legLength": 22,
+    "legWidth": 7,
+    "secondaryColor": 4279338257,
+    "skinColor": 4294920124,
+    "hasWeapon": true,
+    "weaponLength": 32,
+    "weaponColor": 4287143048
+  },
+  "normalAttack": {
+    "damageMultiplier": 1.0,
+    "range": 75,
+    "hitboxHeightRatio": 0.9,
+    "duration": 0.35,
+    "knockbackX": 220,
+    "knockbackY": -90,
+    "lungeSpeed": 90,
+    "maxComboHits": 2,
+    "comboMultipliers": [0.9, 1.3]
+  },
+  "directionalAttacks": [
+    {
+      "direction": "forward",
+      "damage": 1.5,
+      "range": 110,
+      "hitboxHeight": 65,
+      "duration": 0.3,
+      "knockbackX": 400,
+      "knockbackY": -100,
+      "label": "Charge Strike"
+    },
+    {
+      "direction": "down",
+      "damage": 1.1,
+      "range": 65,
+      "hitboxHeight": 50,
+      "duration": 0.4,
+      "knockbackX": 150,
+      "knockbackY": 200,
+      "label": "Down Slash"
+    }
+  ],
+  "skillType": "dash",
+  "skillProjectileCount": 1,
+  "skillProjectileDamage": 280
+}

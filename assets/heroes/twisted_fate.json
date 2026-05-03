@@ -1,0 +1,71 @@
+{
+  "id": "guiguzi",
+  "name": "鬼谷子",
+  "nameEn": "Guiguzi",
+  "title": "纵横捭阖",
+  "titleEn": "Master Strategist",
+  "faction": "warStates",
+  "colorValue": 4294956800,
+  "skillName": "纵横术",
+  "skillNameEn": "Art of Strategy",
+  "skillDesc": "向前方发射5张符咒，每张造成70点伤害",
+  "skillDescEn": "Launch 5 talismans forward, each dealing 70 damage",
+  "hp": 950,
+  "speed": 165,
+  "jumpForce": 310,
+  "attackPower": 44,
+  "defense": 20,
+  "skillCooldown": 5.0,
+  "skillDamage": 70,
+  "visuals": {
+    "bodyType": "normal",
+    "headRadius": 10,
+    "torsoWidth": 22,
+    "torsoHeight": 20,
+    "armLength": 19,
+    "armWidth": 5,
+    "legLength": 23,
+    "legWidth": 6,
+    "secondaryColor": 2863311539,
+    "skinColor": 4294920108,
+    "hasWeapon": true,
+    "weaponLength": 16,
+    "weaponColor": 4294967620
+  },
+  "normalAttack": {
+    "damageMultiplier": 0.9,
+    "range": 58,
+    "hitboxHeightRatio": 0.85,
+    "duration": 0.22,
+    "knockbackX": 170,
+    "knockbackY": -80,
+    "lungeSpeed": 70,
+    "maxComboHits": 1,
+    "comboMultipliers": [1.0]
+  },
+  "directionalAttacks": [
+    {
+      "direction": "forward",
+      "damage": 1.0,
+      "range": 80,
+      "hitboxHeight": 35,
+      "duration": 0.28,
+      "knockbackX": 120,
+      "knockbackY": -50,
+      "label": "Stun Card"
+    },
+    {
+      "direction": "down",
+      "damage": 1.2,
+      "range": 70,
+      "hitboxHeight": 40,
+      "duration": 0.3,
+      "knockbackX": 200,
+      "knockbackY": 150,
+      "label": "Earth Trap"
+    }
+  ],
+  "skillType": "projectile",
+  "skillProjectileCount": 5,
+  "skillProjectileDamage": 70
+}

@@ -1,0 +1,78 @@
+{
+  "id": "shaolin_monk",
+  "name": "少林武僧",
+  "nameEn": "Shaolin Monk",
+  "title": "无影铁拳",
+  "titleEn": "Fearless Iron Fist",
+  "faction": "mythology",
+  "colorValue": 4294935552,
+  "skillName": "金刚般若拳",
+  "skillNameEn": "Diamond Demon Fist",
+  "skillDesc": "凝聚内功发出降魔一击造成200点伤害，随后下砸造成150点伤害",
+  "skillDescEn": "Channel internal energy for a demon-subduing punch dealing 200 damage, then slam for 150 more",
+  "hp": 980,
+  "speed": 185,
+  "jumpForce": 350,
+  "attackPower": 48,
+  "defense": 24,
+  "skillCooldown": 9.0,
+  "skillDamage": 200,
+  "visuals": {
+    "bodyType": "normal",
+    "headRadius": 10,
+    "torsoWidth": 24,
+    "torsoHeight": 21,
+    "armLength": 20,
+    "armWidth": 6,
+    "legLength": 22,
+    "legWidth": 7,
+    "secondaryColor": 2292536354,
+    "skinColor": 3689705864
+  },
+  "normalAttack": {
+    "damageMultiplier": 0.85,
+    "range": 62,
+    "hitboxHeightRatio": 0.9,
+    "duration": 0.22,
+    "knockbackX": 180,
+    "knockbackY": -100,
+    "lungeSpeed": 100,
+    "maxComboHits": 3,
+    "comboMultipliers": [0.7, 0.8, 1.2]
+  },
+  "directionalAttacks": [
+    {
+      "direction": "forward",
+      "damage": 1.3,
+      "range": 95,
+      "hitboxHeight": 55,
+      "duration": 0.25,
+      "knockbackX": 300,
+      "knockbackY": -150,
+      "label": "Whirlwind Kick"
+    },
+    {
+      "direction": "up",
+      "damage": 1.1,
+      "range": 55,
+      "hitboxHeight": 85,
+      "duration": 0.28,
+      "knockbackX": 100,
+      "knockbackY": -380,
+      "label": "Sky Kick"
+    },
+    {
+      "direction": "down",
+      "damage": 1.2,
+      "range": 60,
+      "hitboxHeight": 45,
+      "duration": 0.3,
+      "knockbackX": 120,
+      "knockbackY": 200,
+      "label": "Quake Hammer"
+    }
+  ],
+  "skillType": "dash",
+  "skillProjectileCount": 2,
+  "skillProjectileDamage": 200
+}

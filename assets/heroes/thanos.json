@@ -1,0 +1,72 @@
+{
+  "id": "chiyou",
+  "name": "蚩尤",
+  "nameEn": "Chi You",
+  "title": "战神降临",
+  "titleEn": "The War God Descended",
+  "faction": "mythology",
+  "colorValue": 4287470890,
+  "skillName": "巨灵战吼",
+  "skillNameEn": "Juli War Cry",
+  "skillDesc": "毁灭性一击造成350点伤害并眩晕1.5秒",
+  "skillDescEn": "Devastating punch dealing 350 damage and stunning for 1.5s",
+  "hp": 1150,
+  "speed": 145,
+  "jumpForce": 300,
+  "attackPower": 52,
+  "defense": 32,
+  "skillCooldown": 12.0,
+  "skillDamage": 320,
+  "visuals": {
+    "bodyType": "giant",
+    "headRadius": 13,
+    "torsoWidth": 34,
+    "torsoHeight": 26,
+    "armLength": 25,
+    "armWidth": 9,
+    "legLength": 22,
+    "legWidth": 9,
+    "secondaryColor": 4283511432,
+    "skinColor": 4292818124,
+    "hasHelmet": true,
+    "hasWeapon": true,
+    "weaponLength": 18,
+    "weaponColor": 4294967620
+  },
+  "normalAttack": {
+    "damageMultiplier": 1.2,
+    "range": 90,
+    "hitboxHeightRatio": 1.1,
+    "duration": 0.45,
+    "knockbackX": 300,
+    "knockbackY": -110,
+    "lungeSpeed": 50,
+    "maxComboHits": 2,
+    "comboMultipliers": [1.0, 1.8]
+  },
+  "directionalAttacks": [
+    {
+      "direction": "forward",
+      "damage": 1.6,
+      "range": 110,
+      "hitboxHeight": 80,
+      "duration": 0.4,
+      "knockbackX": 500,
+      "knockbackY": -150,
+      "label": "Savage Fist"
+    },
+    {
+      "direction": "down",
+      "damage": 1.3,
+      "range": 85,
+      "hitboxHeight": 50,
+      "duration": 0.5,
+      "knockbackX": 200,
+      "knockbackY": 250,
+      "label": "Earth Shatter"
+    }
+  ],
+  "skillType": "dash",
+  "skillProjectileCount": 1,
+  "skillProjectileDamage": 320
+}

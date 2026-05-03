@@ -1,0 +1,71 @@
+{
+  "id": "houyi",
+  "name": "后羿",
+  "nameEn": "Hou Yi",
+  "title": "射日神弓",
+  "titleEn": "Sun-Shooting Bow",
+  "faction": "mythology",
+  "colorValue": 4289257215,
+  "skillName": "落日神箭",
+  "skillNameEn": "Sun-Shot Arrow",
+  "skillDesc": "发射一道太阳之力贯穿战场，造成250点伤害并冻结2秒",
+  "skillDescEn": "Fire a sun-powered arrow across screen, dealing 250 damage and freezing for 2s",
+  "hp": 880,
+  "speed": 175,
+  "jumpForce": 300,
+  "attackPower": 42,
+  "defense": 16,
+  "skillCooldown": 12.0,
+  "skillDamage": 250,
+  "visuals": {
+    "bodyType": "slim",
+    "headRadius": 9,
+    "torsoWidth": 20,
+    "torsoHeight": 19,
+    "armLength": 19,
+    "armWidth": 4,
+    "legLength": 23,
+    "legWidth": 5,
+    "secondaryColor": 4282449100,
+    "skinColor": 4294417706,
+    "hasWeapon": true,
+    "weaponLength": 24,
+    "weaponColor": 4289317614
+  },
+  "normalAttack": {
+    "damageMultiplier": 0.85,
+    "range": 65,
+    "hitboxHeightRatio": 0.75,
+    "duration": 0.2,
+    "knockbackX": 160,
+    "knockbackY": -70,
+    "lungeSpeed": 50,
+    "maxComboHits": 2,
+    "comboMultipliers": [1.0, 1.0]
+  },
+  "directionalAttacks": [
+    {
+      "direction": "forward",
+      "damage": 1.1,
+      "range": 85,
+      "hitboxHeight": 25,
+      "duration": 0.25,
+      "knockbackX": 200,
+      "knockbackY": -40,
+      "label": "Sun Arrow"
+    },
+    {
+      "direction": "up",
+      "damage": 0.9,
+      "range": 50,
+      "hitboxHeight": 90,
+      "duration": 0.22,
+      "knockbackX": 60,
+      "knockbackY": -300,
+      "label": "Sky Shot"
+    }
+  ],
+  "skillType": "projectile",
+  "skillProjectileCount": 1,
+  "skillProjectileDamage": 250
+}

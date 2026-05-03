@@ -1,0 +1,68 @@
+{
+  "id": "diaochan",
+  "name": "貂蝉",
+  "nameEn": "Diao Chan",
+  "title": "闭月羞花",
+  "titleEn": "The Peerless Beauty",
+  "faction": "threeKingdoms",
+  "colorValue": 4294939084,
+  "skillName": "倾城之舞",
+  "skillNameEn": "Captivating Dance",
+  "skillDesc": "向周围发射5片花瓣，每片造成90点伤害并减速敌人",
+  "skillDescEn": "Launch 5 petals in all directions, each dealing 90 damage and slowing enemies",
+  "hp": 880,
+  "speed": 195,
+  "jumpForce": 360,
+  "attackPower": 38,
+  "defense": 18,
+  "skillCooldown": 5.0,
+  "skillDamage": 90,
+  "visuals": {
+    "bodyType": "slim",
+    "headRadius": 8,
+    "torsoWidth": 18,
+    "torsoHeight": 18,
+    "armLength": 16,
+    "armWidth": 4,
+    "legLength": 22,
+    "legWidth": 5,
+    "secondaryColor": 3713238054,
+    "skinColor": 4294957776
+  },
+  "normalAttack": {
+    "damageMultiplier": 0.8,
+    "range": 48,
+    "hitboxHeightRatio": 0.8,
+    "duration": 0.18,
+    "knockbackX": 140,
+    "knockbackY": -90,
+    "lungeSpeed": 110,
+    "maxComboHits": 3,
+    "comboMultipliers": [0.7, 0.8, 1.4]
+  },
+  "directionalAttacks": [
+    {
+      "direction": "forward",
+      "damage": 1.1,
+      "range": 75,
+      "hitboxHeight": 30,
+      "duration": 0.18,
+      "knockbackX": 160,
+      "knockbackY": -60,
+      "label": "Thrust"
+    },
+    {
+      "direction": "up",
+      "damage": 1.0,
+      "range": 45,
+      "hitboxHeight": 80,
+      "duration": 0.2,
+      "knockbackX": 80,
+      "knockbackY": -350,
+      "label": "Jump Kick"
+    }
+  ],
+  "skillType": "projectile",
+  "skillProjectileCount": 5,
+  "skillProjectileDamage": 90
+}

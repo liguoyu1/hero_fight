@@ -1,0 +1,82 @@
+{
+  "id": "lubu",
+  "name": "吕布",
+  "nameEn": "Lu Bu",
+  "title": "天下第一",
+  "titleEn": "The Greatest Under Heaven",
+  "faction": "threeKingdoms",
+  "colorValue": 4291626560,
+  "skillName": "天下无双",
+  "skillNameEn": "Peerless",
+  "skillDesc": "旋转攻击，对周围大范围敌人造成250点伤害",
+  "skillDescEn": "Spinning attack, deals 250 damage to all nearby enemies",
+  "hp": 1150,
+  "speed": 150,
+  "jumpForce": 320,
+  "attackPower": 52,
+  "defense": 28,
+  "skillCooldown": 8.0,
+  "skillDamage": 240,
+  "visuals": {
+    "bodyType": "heavy",
+    "headRadius": 12,
+    "torsoWidth": 30,
+    "torsoHeight": 24,
+    "armLength": 23,
+    "armWidth": 7,
+    "legLength": 21,
+    "legWidth": 8,
+    "secondaryColor": 8954368,
+    "skinColor": 4294920124,
+    "hasHelmet": true,
+    "hasWeapon": true,
+    "weaponLength": 30,
+    "weaponColor": 4294953452
+  },
+  "normalAttack": {
+    "damageMultiplier": 1.0,
+    "range": 80,
+    "hitboxHeightRatio": 1.0,
+    "duration": 0.4,
+    "knockbackX": 250,
+    "knockbackY": -80,
+    "lungeSpeed": 60,
+    "maxComboHits": 3,
+    "comboMultipliers": [0.8, 0.9, 1.5]
+  },
+  "directionalAttacks": [
+    {
+      "direction": "forward",
+      "damage": 1.4,
+      "range": 100,
+      "hitboxHeight": 70,
+      "duration": 0.35,
+      "knockbackX": 350,
+      "knockbackY": -120,
+      "label": "冲锋"
+    },
+    {
+      "direction": "up",
+      "damage": 1.2,
+      "range": 60,
+      "hitboxHeight": 90,
+      "duration": 0.4,
+      "knockbackX": 100,
+      "knockbackY": -400,
+      "label": "上挑"
+    },
+    {
+      "direction": "down",
+      "damage": 1.3,
+      "range": 70,
+      "hitboxHeight": 50,
+      "duration": 0.45,
+      "knockbackX": 150,
+      "knockbackY": 200,
+      "label": "下砸"
+    }
+  ],
+  "skillType": "spin",
+  "skillProjectileCount": 8,
+  "skillProjectileDamage": 250
+}

@@ -1,0 +1,69 @@
+{
+  "id": "zhuge",
+  "name": "诸葛亮",
+  "nameEn": "Zhuge Liang",
+  "title": "卧龙",
+  "titleEn": "The Sleeping Dragon",
+  "faction": "threeKingdoms",
+  "colorValue": 4294923519,
+  "skillName": "万箭齐发",
+  "skillNameEn": "Rain of Arrows",
+  "skillDesc": "向扇形方向发射7支箭，每支造成80点伤害",
+  "skillDescEn": "Fire 7 arrows in a fan, each dealing 80 damage",
+  "hp": 880,
+  "speed": 165,
+  "jumpForce": 300,
+  "attackPower": 40,
+  "defense": 18,
+  "skillCooldown": 6.0,
+  "skillDamage": 80,
+  "visuals": {
+    "bodyType": "slim",
+    "headRadius": 9,
+    "torsoWidth": 20,
+    "torsoHeight": 20,
+    "armLength": 18,
+    "armWidth": 4,
+    "legLength": 23,
+    "legWidth": 5,
+    "secondaryColor": 572838634,
+    "skinColor": 4294920108,
+    "hasCape": true
+  },
+  "normalAttack": {
+    "damageMultiplier": 0.9,
+    "range": 50,
+    "hitboxHeightRatio": 0.8,
+    "duration": 0.22,
+    "knockbackX": 150,
+    "knockbackY": -60,
+    "lungeSpeed": 40,
+    "maxComboHits": 1,
+    "comboMultipliers": [1.0]
+  },
+  "directionalAttacks": [
+    {
+      "direction": "forward",
+      "damage": 1.2,
+      "range": 90,
+      "hitboxHeight": 30,
+      "duration": 0.25,
+      "knockbackX": 180,
+      "knockbackY": -50,
+      "label": "Magic Bullet"
+    },
+    {
+      "direction": "up",
+      "damage": 1.0,
+      "range": 55,
+      "hitboxHeight": 100,
+      "duration": 0.28,
+      "knockbackX": 80,
+      "knockbackY": -350,
+      "label": "Magic Up"
+    }
+  ],
+  "skillType": "projectile",
+  "skillProjectileCount": 7,
+  "skillProjectileDamage": 80
+}

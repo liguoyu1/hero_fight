@@ -16,7 +16,8 @@ const HEARTBEAT_INTERVAL = 10000;
 const IDLE_ROOM_TIMEOUT = 300000;
 const MAX_PLAYERS = 2;
 
-app.use(express.static(path.join(__dirname, '..', 'build', 'web')));
+// 静态文件服务（如果需要）
+// app.use(express.static(path.join(__dirname, '..', 'build', 'web')));
 app.use(express.json());
 
 app.get('/health', (req, res) => {
@@ -418,4 +419,5 @@ process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
 // --- Start ---
-server.listen(PORT, () => console.log(`Hero Fighter server on port ${PORT}`));
+const HOST = process.env.HOST || '0.0.0.0';
+server.listen(PORT, HOST, () => console.log(`Hero Fighter server on port ${PORT}`));

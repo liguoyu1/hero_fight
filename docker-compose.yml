@@ -1,0 +1,18 @@
+services:
+  game-server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: hero-fighter-server
+    ports:
+      - "3000:3000"   # WebSocket + HTTP (health check)
+      - "3001:3001"   # UDP LAN discovery
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
