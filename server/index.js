@@ -198,7 +198,11 @@ function handleMessage(ws, client, msg) {
       if (msg.deviceId) {
         client.deviceId = msg.deviceId;
         client.nickname = msg.nickname || 'Player';
-        db.getOrCreatePlayer(msg.deviceId, msg.nickname || 'Player').catch(() => {});
+        db.getOrCreatePlayer(msg.deviceId, msg.nickname || 'Player')
+          .then(() => console.log(`Player registered: ${msg.deviceId}`))
+          .catch(err => console.error(`Failed to create player ${msg.deviceId}:`, err.message));
+      } else {
+        console.warn('register_device: no deviceId provided');
       }
       break;
     }

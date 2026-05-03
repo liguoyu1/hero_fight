@@ -63,41 +63,43 @@ class _NicknameDialogState extends State<_NicknameDialog> {
         isFirstTime ? l10n.setNickname : l10n.changeNickname,
         style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
       ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (isFirstTime)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Text(
-                l10n.enterNicknameHint,
-                style: const TextStyle(color: Colors.white70, fontSize: 13),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (isFirstTime)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  l10n.enterNicknameHint,
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                ),
               ),
+            TextField(
+              controller: _controller,
+              autofocus: true,
+              maxLength: maxNicknameLength,
+              inputFormatters: [
+                LengthLimitingTextInputFormatter(maxNicknameLength),
+              ],
+              style: const TextStyle(color: Colors.white, fontSize: 18),
+              decoration: InputDecoration(
+                hintText: l10n.enterNicknamePlaceholder,
+                hintStyle: const TextStyle(color: Colors.white38),
+                errorText: _error,
+                counterStyle: const TextStyle(color: Colors.white38),
+                enabledBorder: const UnderlineInputBorder(
+                  borderSide: BorderSide(color: Colors.white24),
+                ),
+                focusedBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(color: Colors.amber.shade400),
+                ),
+              ),
+              onSubmitted: (_) => _submit(),
             ),
-          TextField(
-            controller: _controller,
-            autofocus: true,
-            maxLength: maxNicknameLength,
-            inputFormatters: [
-              LengthLimitingTextInputFormatter(maxNicknameLength),
-            ],
-            style: const TextStyle(color: Colors.white, fontSize: 18),
-            decoration: InputDecoration(
-              hintText: l10n.enterNicknamePlaceholder,
-              hintStyle: const TextStyle(color: Colors.white38),
-              errorText: _error,
-              counterStyle: const TextStyle(color: Colors.white38),
-              enabledBorder: const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.white24),
-              ),
-              focusedBorder: UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.amber.shade400),
-              ),
-            ),
-            onSubmitted: (_) => _submit(),
-          ),
-        ],
+          ],
+        ),
       ),
       actions: [
         if (!isFirstTime)

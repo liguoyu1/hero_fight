@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:web_socket_channel/web_socket_channel.dart';
 
@@ -15,6 +16,7 @@ class GameClient {
   StreamSubscription? _subscription;
   Timer? _reconnectTimer;
   Timer? _lanDiscoveryTimer;
+  final Random _random = Random();
 
   String? _serverUrl;
   String? _clientId;
@@ -79,7 +81,19 @@ class GameClient {
     _serverUrl = url;
     _autoReconnect = autoReconnect;
     _reconnectAttempts = 0;
-    _deviceId ??= await getDeviceId();
+    
+    // 确保有 deviceId
+    if (_deviceId == null) {
+      try {
+        _deviceId = await getDeviceId();
+        print('Device ID obtained: $_deviceId');
+      } catch (e) {
+        // 如果获取失败，生成随机 ID
+        _deviceId = 'random_${DateTime.now().millisecondsSinceEpoch}_${_random.nextInt(999999)}';
+        print('Failed to get device ID, using random: $_deviceId');
+      }
+    }
+    
     await _doConnect();
   }
 
