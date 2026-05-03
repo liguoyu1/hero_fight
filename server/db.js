@@ -234,15 +234,25 @@ async function getLeaderboard(limit = 20) {
   const safeLimit = parseInt(limit) || 20;
   const [rows] = await db.execute(`
     SELECT id, name, total_wins, total_losses, total_draws,
-           (total_wins + total_losses + total_draws) as total_games,
-           CASE WHEN (total_wins + total_losses) > 0
-             THEN CAST(total_wins AS DECIMAL) / (total_wins + total_losses)
-             ELSE 0 END as win_rate
+           (total_wins + total_losses + total_draws) as total_games
     FROM players
     WHERE (total_wins + total_losses + total_draws) >= 5
-    ORDER BY win_rate DESC, total_wins DESC
+    ORDER BY total_wins DESC, total_losses ASC
     LIMIT ${safeLimit}
   `);
+  
+  return rows.map(p => ({
+    playerId: p.id,
+    name: p.name,
+    displayName: `${p.name}#${p.id.slice(-4)}`,
+    totalWins: p.total_wins,
+    totalLosses: p.total_losses,
+    totalDraws: p.total_draws,
+    totalGames: p.total_games,
+    winRate: (p.total_wins + p.total_losses) > 0 
+      ? p.total_wins / (p.total_wins + p.total_losses) 
+      : 0,
+  }));
   
   return rows.map(p => ({
     playerId: p.id,
