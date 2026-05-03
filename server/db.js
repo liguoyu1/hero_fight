@@ -65,11 +65,11 @@ async function initTables() {
       )
     `);
 
-    // 创建索引
-    await conn.execute(`CREATE INDEX IF NOT EXISTS idx_hero_stats_player ON hero_stats(player_id)`);
-    await conn.execute(`CREATE INDEX IF NOT EXISTS idx_game_history_player1 ON game_history(player1_id)`);
-    await conn.execute(`CREATE INDEX IF NOT EXISTS idx_game_history_player2 ON game_history(player2_id)`);
-    await conn.execute(`CREATE INDEX IF NOT EXISTS idx_game_history_played ON game_history(played_at)`);
+    // 创建索引（MySQL 语法）
+    try { await conn.execute(`ALTER TABLE hero_stats ADD INDEX idx_hero_stats_player (player_id)`); } catch(e) {}
+    try { await conn.execute(`ALTER TABLE game_history ADD INDEX idx_game_history_player1 (player1_id)`); } catch(e) {}
+    try { await conn.execute(`ALTER TABLE game_history ADD INDEX idx_game_history_player2 (player2_id)`); } catch(e) {}
+    try { await conn.execute(`ALTER TABLE game_history ADD INDEX idx_game_history_played (played_at)`); } catch(e) {}
   } finally {
     conn.release();
   }
