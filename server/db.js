@@ -209,14 +209,16 @@ async function getPlayerStats(playerId) {
 
 async function getTopHeroes(playerId, count = 3, minGames = 3) {
   const db = await getDb();
+  const safeCount = parseInt(count) || 3;
+  const safeMinGames = parseInt(minGames) || 3;
   const [rows] = await db.execute(`
     SELECT hero_id, wins, losses, (wins + losses) as total_games,
            CAST(wins AS DECIMAL) / (wins + losses) as win_rate
     FROM hero_stats
     WHERE player_id = ? AND (wins + losses) >= ?
     ORDER BY win_rate DESC, total_games DESC
-    LIMIT ?
-  `, [playerId, minGames, count]);
+    LIMIT ${safeCount}
+  `, [playerId, safeMinGames]);
   
   return rows.map(h => ({
     heroId: h.hero_id,
@@ -229,6 +231,7 @@ async function getTopHeroes(playerId, count = 3, minGames = 3) {
 
 async function getLeaderboard(limit = 20) {
   const db = await getDb();
+  const safeLimit = parseInt(limit) || 20;
   const [rows] = await db.execute(`
     SELECT id, name, total_wins, total_losses, total_draws,
            (total_wins + total_losses + total_draws) as total_games,
@@ -238,8 +241,8 @@ async function getLeaderboard(limit = 20) {
     FROM players
     WHERE (total_wins + total_losses + total_draws) >= 5
     ORDER BY win_rate DESC, total_wins DESC
-    LIMIT ?
-  `, [limit]);
+    LIMIT ${safeLimit}
+  `);
   
   return rows.map(p => ({
     playerId: p.id,
@@ -255,12 +258,13 @@ async function getLeaderboard(limit = 20) {
 
 async function getRecentGames(playerId, limit = 10) {
   const db = await getDb();
+  const safeLimit = parseInt(limit) || 10;
   const [rows] = await db.execute(`
     SELECT * FROM game_history
     WHERE player1_id = ? OR player2_id = ?
     ORDER BY played_at DESC
-    LIMIT ?
-  `, [playerId, playerId, limit]);
+    LIMIT ${safeLimit}
+  `, [playerId, playerId]);
   return rows;
 }
 
