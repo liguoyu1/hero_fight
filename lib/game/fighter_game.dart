@@ -100,12 +100,8 @@ class FighterGame extends FlameGame
   static const double wallRight = 1260;
   static const double stageWidth = 1280;
   static const double stageHeight = 600;
-  // Game world aspect ratio (used for camera adaptation)
+  // Game world aspect ratio
   static const double gameAspectRatio = stageWidth / stageHeight; // 2.133...
-
-  // Current camera viewport size (may differ from stage size on different screens)
-  double _cameraWidth = stageWidth;
-  double _cameraHeight = stageHeight;
 
   FighterGame({
     required this.hero1Id,
@@ -264,28 +260,8 @@ class FighterGame extends FlameGame
     touchControls?.onGameResize(size);
     tutorialOverlay.onGameResize(size);
 
-    // iOS screen adaptation: dynamically adjust visibleGameSize based on screen aspect ratio
-    // Game aspect ratio: 1280/600 = 2.133
-    // Portrait phones (e.g., 390×844, aspect 0.46) would have severe letterboxing without adaptation
-    final screenAspectRatio = size.x / size.y;
-    const gameAspectRatio = stageWidth / stageHeight; // 1280/600 = 2.133
-
-    double newWidth = stageWidth.toDouble();
-    double newHeight = stageHeight.toDouble();
-
-    if (screenAspectRatio > gameAspectRatio) {
-      // Screen is wider than game (ultrawide displays): expand visible width
-      newWidth = stageHeight.toDouble() * screenAspectRatio;
-    } else if (screenAspectRatio < gameAspectRatio) {
-      // Screen is narrower than game (portrait phones): expand visible height
-      // This shows MORE vertical content instead of letterboxing
-      newHeight = stageWidth.toDouble() / screenAspectRatio;
-    }
-
-    // Update camera viewport dimensions
-    _cameraWidth = newWidth;
-    _cameraHeight = newHeight;
-    camera.viewfinder.visibleGameSize = Vector2(newWidth, newHeight);
+    // 使用固定游戏世界大小，让 Flame 自动缩放适应屏幕
+    camera.viewfinder.visibleGameSize = Vector2(stageWidth.toDouble(), stageHeight.toDouble());
   }
 
   @override
@@ -897,35 +873,34 @@ class FighterGame extends FlameGame
     final h1 = registry.get(player1.heroId);
     final h2 = registry.get(player2.heroId);
 
-    // Calculate adaptive margins based on actual camera viewport
-    final marginX = _cameraWidth * 0.03; // 3% of viewport width
-    final marginY = _cameraHeight * 0.03; // 3% of viewport height
+    // 使用固定游戏世界大小，确保 HUD 始终在可见区域内
+    const marginX = stageWidth * 0.03; // 3% of game width
+    const marginY = stageHeight * 0.03; // 3% of game height
     
-    // Scale HUD elements based on viewport size
-    final scaleFactor = (_cameraWidth / stageWidth).clamp(0.7, 1.2);
-    final barWidth = 300.0 * scaleFactor;
-    final barHeight = 20.0 * scaleFactor;
-    final barY = marginY;
-    final textSize = (28 * scaleFactor).clamp(18.0, 32.0);
-    final infoTextSize = (14 * scaleFactor).clamp(10.0, 16.0);
+    // HUD 元素大小基于固定游戏世界
+    const barWidth = 300.0;
+    const barHeight = 20.0;
+    const barY = marginY;
+    const textSize = 28.0;
+    const infoTextSize = 14.0;
 
     // P1 HP bar (left side) — uses smooth display HP
     _drawHPBar(canvas, marginX, barY, barWidth, barHeight,
         player1.hp, _displayHp1, player1.maxHp, player1.color, textSize: textSize);
 
     // P2 HP bar (right side, fills from right) — uses smooth display HP
-    _drawHPBar(canvas, _cameraWidth - marginX - barWidth, barY, barWidth, barHeight,
+    _drawHPBar(canvas, stageWidth - marginX - barWidth, barY, barWidth, barHeight,
         player2.hp, _displayHp2, player2.maxHp, player2.color, rightAligned: true, textSize: textSize);
 
     // Timer (centered)
     final timerText = roundTimer.ceil().toString().padLeft(2, '0');
     final timerParagraph = _buildText(timerText, textSize, const Color(0xFFFFFFFF));
-    canvas.drawParagraph(timerParagraph, Offset(_cameraWidth / 2 - timerParagraph.width / 2, marginY * 0.5));
+    canvas.drawParagraph(timerParagraph, Offset(stageWidth / 2 - timerParagraph.width / 2, marginY * 0.5));
 
     // Player info blocks (below HP bars)
     final infoY = barY + barHeight + marginY * 0.5;
     _drawPlayerInfo(canvas, marginX, infoY, player1, h1, true, infoTextSize);
-    _drawPlayerInfo(canvas, _cameraWidth - marginX - 200 * scaleFactor, infoY, player2, h2, false, infoTextSize);
+    _drawPlayerInfo(canvas, stageWidth - marginX - 200, infoY, player2, h2, false, infoTextSize);
 
     // Combo counters (rendered near each fighter)
     _drawComboCounter(canvas, player1, _comboDisplayCount1, _comboDisplayTimer1);
