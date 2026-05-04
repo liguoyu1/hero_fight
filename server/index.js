@@ -339,6 +339,13 @@ function handleMessage(ws, client, msg) {
     case 'game_end': {
       const room = rooms.get(client.roomId);
       if (!room) return;
+      
+      // 防止重复记录：检查房间是否已完成
+      if (room.state === 'finished') {
+        console.log(`Game end already processed for room ${room.id}`);
+        return;
+      }
+      
       room.state = 'finished';
       room.lastActivity = Date.now();
       broadcast(room, 'game_end', { reason: msg.reason || 'game_over', winnerId: msg.winnerId });
@@ -357,13 +364,24 @@ function handleMessage(ws, client, msg) {
         // 获取游戏模式（从消息中获取，默认为 online）
         const gameMode = msg.gameMode || 'online';
         
+        // 映射 winnerId：如果是 slot (0/1)，转换为 deviceId
+        let winnerDeviceId = null;
+        if (msg.winnerId !== null && msg.winnerId !== undefined) {
+          const winnerIdStr = String(msg.winnerId);
+          if (winnerIdStr === '0' || winnerIdStr === p1.clientId) {
+            winnerDeviceId = d1;
+          } else if (winnerIdStr === '1' || winnerIdStr === p2.clientId) {
+            winnerDeviceId = d2;
+          }
+        }
+        
         db.recordGame({
           roomId: room.id,
           player1Id: d1,
           player2Id: d2,
           player1Hero: p1.heroId || 'unknown',
           player2Hero: p2.heroId || 'unknown',
-          winnerId: msg.winnerId === p1.clientId ? d1 : msg.winnerId === p2.clientId ? d2 : null,
+          winnerId: winnerDeviceId,
           player1Name: p1.name || 'Player 1',
           player2Name: p2.name || 'Player 2',
           gameMode: gameMode,
