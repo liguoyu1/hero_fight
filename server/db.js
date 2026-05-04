@@ -67,6 +67,17 @@ async function initTables() {
       )
     `);
 
+    // 迁移：添加 game_mode 列（如果不存在）
+    const [columns] = await conn.execute(`SHOW COLUMNS FROM game_history LIKE 'game_mode'`);
+    if (columns.length === 0) {
+      try {
+        await conn.execute(`ALTER TABLE game_history ADD COLUMN game_mode VARCHAR(50) DEFAULT 'online'`);
+        console.log('[db] Added game_mode column to game_history');
+      } catch(e) {
+        console.error('[db] Failed to add game_mode column:', e.message);
+      }
+    }
+
     // 创建索引（MySQL 语法）
     try { await conn.execute(`ALTER TABLE hero_stats ADD INDEX idx_hero_stats_player (player_id)`); } catch(e) {}
     try { await conn.execute(`ALTER TABLE game_history ADD INDEX idx_game_history_player1 (player1_id)`); } catch(e) {}
