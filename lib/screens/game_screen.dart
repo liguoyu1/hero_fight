@@ -56,18 +56,16 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _focusNode.requestFocus();
 
-    // Hide system UI for immersive full-screen gameplay
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
-      systemNavigationBarColor: Colors.transparent,
-    ));
-    // Set preferred orientations to landscape only
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight,
-    ]);
+    // Hide system UI + lock orientation (iOS/Android only, wraps for desktop)
+    try {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+    } catch (_) {
+      // Desktop platforms don't support these — ignore
+    }
 
     _game = FighterGame(
       hero1Id: widget.hero1Id,
@@ -197,9 +195,11 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
     _game.onRemove();
     widget.network?.disconnect();
     widget.network?.dispose();
-    // Restore system UI and default orientations
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    SystemChrome.setPreferredOrientations([]);
+    // Restore system UI
+    try {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      SystemChrome.setPreferredOrientations([]);
+    } catch (_) {}
     super.dispose();
   }
 

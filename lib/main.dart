@@ -11,12 +11,13 @@ import 'network/network_manager.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  // 全局强制横屏
-  SystemChrome.setPreferredOrientations([
-    DeviceOrientation.landscapeLeft,
-    DeviceOrientation.landscapeRight,
-  ]);
-  SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  try {
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  } catch (_) {} // Desktop doesn't support these
   registerAllHeroes();
   runApp(const HeroFighterApp());
 }
