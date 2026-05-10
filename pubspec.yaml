@@ -1,5 +1,5 @@
 name: hero_fighter
-description: "A new Flutter project."
+description: "A 2D fighting game with 12 heroes, online multiplayer, and rollback netcode"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -37,10 +37,11 @@ dependencies:
   flame: ^1.37.0
   web: ^1.1.1
   web_socket_channel: ^3.0.3
-  shared_preferences: ^2.3.4
-  device_info_plus: ^13.1.0
+  shared_preferences: ^2.2.2
+  device_info_plus: ^9.1.2
   http: ^1.6.0
   flame_audio: ^2.12.1
+  crypto: ^3.0.6
 
 dev_dependencies:
   flutter_test:

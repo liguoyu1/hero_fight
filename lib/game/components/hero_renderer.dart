@@ -407,11 +407,18 @@ class HeroRenderer {
     final eyeR = r * 0.28;
     final pupilR = r * 0.15;
 
+    // Left eye
     canvas.drawOval(
       Rect.fromCenter(center: Offset(eyeOffX - 1, eyeY), width: eyeR * 2, height: eyeR * 1.6),
       eyePaint,
     );
     canvas.drawCircle(Offset(eyeOffX + 1, eyeY), pupilR, pupilPaint);
+    // Right eye
+    canvas.drawOval(
+      Rect.fromCenter(center: Offset(-eyeOffX - 1, eyeY), width: eyeR * 2, height: eyeR * 1.6),
+      eyePaint,
+    );
+    canvas.drawCircle(Offset(-eyeOffX + 1, eyeY), pupilR, pupilPaint);
 
     // Mouth (small line)
     final mouthPaint = Paint()

@@ -1,16 +1,17 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flame/game.dart' show GameWidget;
 import 'package:http/http.dart' as http;
 
+import '../config/app_config.dart';
 import '../game/fighter_game.dart';
 import '../game/ai/ai_controller.dart';
 import '../game/network/rollback_engine.dart';
 import '../game/components/fighter.dart';
 import '../network/network_manager.dart';
-import '../network/game_client.dart';
 import '../data/device_id.dart';
 import '../data/nickname.dart';
 import '../i18n/app_localizations.dart';
@@ -38,8 +39,9 @@ class GameScreen extends StatefulWidget {
   State<GameScreen> createState() => _GameScreenState();
 }
 
-class _GameScreenState extends State<GameScreen> {
+class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
   final FocusNode _focusNode = FocusNode();
+  bool _paused = false;
   late final FighterGame _game;
   Timer? _inputSendTimer;
   StreamSubscription? _inputSub;
@@ -51,6 +53,7 @@ class _GameScreenState extends State<GameScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _focusNode.requestFocus();
 
     // Hide system UI for immersive full-screen gameplay
@@ -184,6 +187,7 @@ class _GameScreenState extends State<GameScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _inputSendTimer?.cancel();
     _inputSub?.cancel();
     _gameEndSub?.cancel();
@@ -199,6 +203,22 @@ class _GameScreenState extends State<GameScreen> {
     super.dispose();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      if (_game.gameState == GameState.fighting) {
+        _game.gameState = GameState.paused;
+        _paused = true;
+      }
+    } else if (state == AppLifecycleState.resumed) {
+      if (_paused && _game.gameState == GameState.paused) {
+        _game.gameState = GameState.fighting;
+        _paused = false;
+        _focusNode.requestFocus();
+      }
+    }
+  }
+
   void _exitToMenu() {
     // Send game end to opponent if in network mode
     if (widget.network != null && (widget.mode == 'online' || widget.mode == 'lan')) {
@@ -210,6 +230,18 @@ class _GameScreenState extends State<GameScreen> {
   void _restartGame() {
     _game.resetRound();
     _focusNode.requestFocus();
+  }
+
+  /// 计算 HMAC-SHA256 签名
+  /// 先构建不含 signature 的 JSON，签名后附加 signature 再发送
+  String _computeHmacSignature(Map<String, dynamic> data) {
+    final payload = json.encode(data);
+    // Use configured secret or fallback (production MUST set real secret)
+    final secret = AppConfig.appSecret ?? 'hero-fighter-dev-key';
+    final key = utf8.encode(secret);
+    final hmac = Hmac(sha256, key);
+    final digest = hmac.convert(utf8.encode(payload));
+    return digest.toString();
   }
 
   /// 保存游戏记录到服务器（AI/本地模式）
@@ -237,30 +269,39 @@ class _GameScreenState extends State<GameScreen> {
         winnerId = player2Id;
       }
       
+      // 构建不含签名的数据体
+      final dataBody = {
+        'player1Id': player1Id,
+        'player2Id': player2Id,
+        'player1Hero': widget.hero1Id,
+        'player2Hero': widget.hero2Id,
+        'winnerId': winnerId,
+        'player1Name': player1Name,
+        'player2Name': player2Name,
+        'gameMode': widget.mode,
+      };
+      
+      // 计算 HMAC 签名
+      final signature = _computeHmacSignature(dataBody);
+      
+      // 附加签名后发送
+      final body = {...dataBody, 'signature': signature};
+      
       // 发送游戏记录到服务器（使用 HTTP POST）
       final url = Uri.parse('${AppConfig.apiBaseUrl}/api/game_record');
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
-        body: json.encode({
-          'player1Id': player1Id,
-          'player2Id': player2Id,
-          'player1Hero': widget.hero1Id,
-          'player2Hero': widget.hero2Id,
-          'winnerId': winnerId,
-          'player1Name': player1Name,
-          'player2Name': player2Name,
-          'gameMode': widget.mode,
-        }),
+        body: json.encode(body),
       );
       
       if (response.statusCode == 200) {
-        print('Game record saved: $winnerName');
+        debugPrint('Game record saved: $winnerName');
       } else {
-        print('Failed to save game record: ${response.body}');
+        debugPrint('Failed to save game record: ${response.body}');
       }
     } catch (e) {
-      print('Failed to save game record: $e');
+      debugPrint('Failed to save game record: $e');
     }
   }
 
@@ -274,7 +315,29 @@ class _GameScreenState extends State<GameScreen> {
     final safeBottom = MediaQuery.of(context).padding.bottom;
     final safeRight = MediaQuery.of(context).padding.right;
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) {
+          if (_game.gameState == GameState.fighting) {
+            showDialog(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                backgroundColor: const Color(0xFF1A1A1A),
+                title: const Text('Exit Game?', style: TextStyle(color: Colors.white)),
+                content: const Text('Your progress will be lost. Are you sure?', style: TextStyle(color: Colors.white70)),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l10n.cancel, style: const TextStyle(color: Colors.white54))),
+                  TextButton(onPressed: () { Navigator.pop(ctx); _exitToMenu(); }, child: Text(l10n.exit, style: const TextStyle(color: Colors.redAccent))),
+                ],
+              ),
+            );
+          } else {
+            _exitToMenu();
+          }
+        }
+      },
+      child: Scaffold(
       backgroundColor: Colors.black,
       body: KeyboardListener(
         focusNode: _focusNode,
@@ -338,7 +401,7 @@ class _GameScreenState extends State<GameScreen> {
           ],
         ),
       ),
-    );
+    ));
   }
 }
 

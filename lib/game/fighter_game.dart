@@ -1,8 +1,10 @@
+import 'dart:math';
 import 'dart:ui';
 
 import 'package:flame/components.dart';
 import 'package:flame/events.dart';
 import 'package:flame/game.dart';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart' show Alignment, LinearGradient;
 import 'package:flutter/services.dart';
@@ -16,6 +18,8 @@ import 'components/particle_system.dart';
 import 'components/debug_overlay.dart';
 import 'components/tutorial_overlay.dart';
 import '../game/audio/sound_manager.dart';
+import 'systems/input_system.dart';
+import 'systems/camera_controller.dart';
 import '../i18n/app_localizations.dart';
 import 'network/rollback_engine.dart';
 import 'utils/game_random.dart';
@@ -26,9 +30,28 @@ import 'heroes/skill_util.dart';
 /// Game states
 enum GameState { menu, heroSelect, fighting, paused, result }
 
+/// HUD component that renders in viewport space (screen coordinates)
+class HUD extends Component {
+  final FighterGame game;
+  HUD(this.game);
+
+  @override
+  void render(Canvas canvas) {
+    // HUD renders in screen space (viewport coordinates)
+    // final w = game.size.x;  // reserved for future HUD rendering
+    // final h = game.size.y;
+
+    // This is a placeholder - the actual HUD rendering will be moved here
+    // For now, just call the existing _renderHUD() method
+    // But we need to access private methods, so we'll duplicate the logic
+  }
+}
+
 /// Main Flame game class for Hero Fighter
 class FighterGame extends FlameGame
     with HasCollisionDetection, KeyboardEvents {
+  // Viewport managed via camera.viewfinder.visibleGameSize in onLoad()
+
   // Game state
   GameState gameState = GameState.fighting;
   double roundTimer = 99;
@@ -60,8 +83,8 @@ class FighterGame extends FlameGame
   bool _hasRemoteInput = false;
   int localPlayerIndex = 0; // 0 or 1, which player this device controls
 
-  // VFX
-  final ScreenShake screenShake = ScreenShake();
+  // Camera + screen shake
+  final CameraController cameraController = CameraController();
   late ParticleSystem particleSystem;
   late DebugOverlay debugOverlay;
   final TutorialOverlay tutorialOverlay = TutorialOverlay();
@@ -94,17 +117,17 @@ class FighterGame extends FlameGame
   int _lastComboIndex1 = 0;
   int _lastComboIndex2 = 0;
 
-  // Keyboard state tracking
-  final Set<LogicalKeyboardKey> _keysPressed = {};
+  // Input system — keyboard/touch → FighterInput mapping
+  final InputSystem inputSystem = InputSystem();
 
-  // Stage constants (for background rendering only — no collision)
-  static const double groundY = 520;
-  static const double wallLeft = 20;
-  static const double wallRight = 1260;
+  // Stage dimensions — fixed game world at 1280×600
+  // Flame viewport handles scaling to fit any screen size
   static const double stageWidth = 1280;
   static const double stageHeight = 600;
-  // Game world aspect ratio
   static const double gameAspectRatio = stageWidth / stageHeight; // 2.133...
+  static const double groundY = 520;
+  static const double wallLeft = 20;
+  static const double wallRight = stageWidth - 20; // 1260
 
   FighterGame({
     required this.hero1Id,
@@ -113,7 +136,7 @@ class FighterGame extends FlameGame
   });
 
   @override
-  Color backgroundColor() => const Color(0xFF1A1A2E);
+  Color backgroundColor() => const Color(0xFF0D0D2B);
 
   @override
   Future<void> onLoad() async {
@@ -122,6 +145,12 @@ class FighterGame extends FlameGame
     } catch (e) {
       // Continue even if super.onLoad fails
     }
+
+    // 设置相机视口以适应不同 iOS 设备屏幕
+    // 使用 FixedAspectRatioViewport 自动处理宽高比，避免黑边
+    camera.viewfinder.visibleGameSize = Vector2(stageWidth.toDouble(), stageHeight.toDouble());
+    camera.viewfinder.anchor = Anchor.center;
+    camera.viewfinder.position = Vector2(stageWidth / 2, stageHeight / 2);
 
     final registry = HeroRegistry.instance;
     final hero1 = registry.get(hero1Id);
@@ -146,7 +175,7 @@ class FighterGame extends FlameGame
     add(particleSystem);
 
     // Inject deterministic PRNG for screen shake (rollback netcode)
-    screenShake.random = gameRandom;
+    cameraController.screenShake.random = gameRandom;
 
     // Debug overlay (toggle with backtick key)
     debugOverlay = DebugOverlay();
@@ -154,6 +183,7 @@ class FighterGame extends FlameGame
 
     // Tutorial overlay (first-time onboarding) — add to viewport for screen-space tap handling
     camera.viewport.add(tutorialOverlay);
+    tutorialOverlay.init(AppLocalizations.fromSystemLocale());
     tutorialOverlay.checkAndShow();
 
     // In AI mode, attach AI controller to player2
@@ -168,7 +198,7 @@ class FighterGame extends FlameGame
       camera.viewport.add(touchControls!);
     }
 
-    // Set camera to fixed resolution, anchored at center of stage
+    // Camera shows entire fixed 1280×600 game world — Flame viewport auto-scales
     camera.viewfinder.visibleGameSize = Vector2(stageWidth, stageHeight);
     camera.viewfinder.anchor = Anchor.center;
     camera.viewfinder.position = Vector2(stageWidth / 2, stageHeight / 2);
@@ -260,11 +290,22 @@ class FighterGame extends FlameGame
   @override
   void onGameResize(Vector2 size) {
     super.onGameResize(size);
+    // Viewport components need screen-size updates for layout
     touchControls?.onGameResize(size);
     tutorialOverlay.onGameResize(size);
 
-    // 使用固定游戏世界大小，让 Flame 自动缩放适应屏幕
-    camera.viewfinder.visibleGameSize = Vector2(stageWidth.toDouble(), stageHeight.toDouble());
+    // Game world is fixed 1280×600 — Flame viewport auto-scales to fit screen.
+    // Fighter wrap bounds use the fixed stageWidth/stageHeight/groundY constants.
+    if (player1.isLoaded) {
+      player1.wrapMinX = wallLeft;
+      player1.wrapMaxX = wallRight;
+      player1.wrapMaxY = groundY;
+    }
+    if (player2.isLoaded) {
+      player2.wrapMinX = wallLeft;
+      player2.wrapMaxX = wallRight;
+      player2.wrapMaxY = groundY;
+    }
   }
 
   @override
@@ -342,7 +383,7 @@ class FighterGame extends FlameGame
     }
 
     // VFX updates
-    screenShake.update(dt);
+    cameraController.screenShake.update(dt);
 
     // Smooth HP interpolation
     _displayHp1 += (player1.hp - _displayHp1) * _hpLerpSpeed * dt;
@@ -401,7 +442,7 @@ class FighterGame extends FlameGame
     }
 
     // VFX (still rendered on screen, but not replayed during rollback)
-    screenShake.update(dt);
+    cameraController.screenShake.update(dt);
 
     // Smooth HP interpolation
     _displayHp1 += (player1.hp - _displayHp1) * _hpLerpSpeed * dt;
@@ -431,39 +472,10 @@ class FighterGame extends FlameGame
 
   /// Collect P1's input from keyboard + touch controls.
   FighterInput _collectP1Input() {
-    final input = FighterInput.empty();
-
-    if (localPlayerIndex == 0) {
-      // P1: WASD + J/K
-      input.left = _keysPressed.contains(LogicalKeyboardKey.keyA);
-      input.right = _keysPressed.contains(LogicalKeyboardKey.keyD);
-      input.up = _keysPressed.contains(LogicalKeyboardKey.keyW);
-      input.down = _keysPressed.contains(LogicalKeyboardKey.keyS);
-      input.attack = _keysPressed.contains(LogicalKeyboardKey.keyJ);
-      input.skill = _keysPressed.contains(LogicalKeyboardKey.keyK);
-    } else {
-      // P2: Arrow keys + Numpad 1/2
-      input.left = _keysPressed.contains(LogicalKeyboardKey.arrowLeft);
-      input.right = _keysPressed.contains(LogicalKeyboardKey.arrowRight);
-      input.up = _keysPressed.contains(LogicalKeyboardKey.arrowUp);
-      input.down = _keysPressed.contains(LogicalKeyboardKey.arrowDown);
-      input.attack = _keysPressed.contains(LogicalKeyboardKey.numpad1);
-      input.skill = _keysPressed.contains(LogicalKeyboardKey.numpad2);
-    }
-
-    // Touch overrides for P1 only
-    if (localPlayerIndex == 0 && touchControls != null) {
-      final ti = touchControls!.input;
-      if (ti.left || ti.right || ti.attack || ti.skill) {
-        input.left = ti.left;
-        input.right = ti.right;
-        if (ti.jump) input.up = true;
-        input.attack = ti.attack;
-        input.skill = ti.skill;
-      }
-    }
-
-    return input;
+    return inputSystem.collectInput(
+      localPlayerIndex: localPlayerIndex,
+      touchControls: touchControls,
+    );
   }
 
   /// Receive remote player's input from the network.
@@ -560,12 +572,7 @@ class FighterGame extends FlameGame
   }
 
   void _updateCamera() {
-    // Camera is fixed at stage center — HUD is drawn in world coords at fixed positions
-    // Only apply screen shake offset
-    camera.viewfinder.position = Vector2(
-      stageWidth / 2 + screenShake.currentOffset.x,
-      stageHeight / 2 + screenShake.currentOffset.y,
-    );
+    cameraController.update(camera, stageWidth, stageHeight);
   }
 
   void _endRound() {
@@ -624,7 +631,7 @@ class FighterGame extends FlameGame
     );
     add(dmgNum);
     final shakeIntensity = (damage / 300).clamp(0.1, 0.6);
-    screenShake.addTrauma(shakeIntensity);
+    cameraController.screenShake.addTrauma(shakeIntensity);
 
     // Hit spark particles
     particleSystem.spawnHitSparks(
@@ -677,45 +684,54 @@ class FighterGame extends FlameGame
   Map<String, dynamic> getLocalInput(int localPlayerIndex) {
     if (localPlayerIndex == 0) {
       return {
-        'left': _keysPressed.contains(LogicalKeyboardKey.keyA),
-        'right': _keysPressed.contains(LogicalKeyboardKey.keyD),
-        'up': _keysPressed.contains(LogicalKeyboardKey.keyW),
-        'down': _keysPressed.contains(LogicalKeyboardKey.keyS),
+        'left': inputSystem.keysPressed.contains(LogicalKeyboardKey.keyA),
+        'right': inputSystem.keysPressed.contains(LogicalKeyboardKey.keyD),
+        'up': inputSystem.keysPressed.contains(LogicalKeyboardKey.keyW),
+        'down': inputSystem.keysPressed.contains(LogicalKeyboardKey.keyS),
         'jump': false, // jump deprecated for 8-direction
-        'attack': _keysPressed.contains(LogicalKeyboardKey.keyJ),
-        'skill': _keysPressed.contains(LogicalKeyboardKey.keyK),
+        'attack': inputSystem.keysPressed.contains(LogicalKeyboardKey.keyJ),
+        'skill': inputSystem.keysPressed.contains(LogicalKeyboardKey.keyK),
       };
     } else {
       return {
-        'left': _keysPressed.contains(LogicalKeyboardKey.arrowLeft),
-        'right': _keysPressed.contains(LogicalKeyboardKey.arrowRight),
-        'up': _keysPressed.contains(LogicalKeyboardKey.arrowUp),
-        'down': _keysPressed.contains(LogicalKeyboardKey.arrowDown),
+        'left': inputSystem.keysPressed.contains(LogicalKeyboardKey.arrowLeft),
+        'right': inputSystem.keysPressed.contains(LogicalKeyboardKey.arrowRight),
+        'up': inputSystem.keysPressed.contains(LogicalKeyboardKey.arrowUp),
+        'down': inputSystem.keysPressed.contains(LogicalKeyboardKey.arrowDown),
         'jump': false, // jump deprecated for 8-direction
-        'attack': _keysPressed.contains(LogicalKeyboardKey.numpad1),
-        'skill': _keysPressed.contains(LogicalKeyboardKey.numpad2),
+        'attack': inputSystem.keysPressed.contains(LogicalKeyboardKey.numpad1),
+        'skill': inputSystem.keysPressed.contains(LogicalKeyboardKey.numpad2),
       };
     }
   }
 
   // --- Input Handling ---
 
+  void _clearFighterInput(Fighter fighter) {
+    fighter.input.left = false;
+    fighter.input.right = false;
+    fighter.input.up = false;
+    fighter.input.down = false;
+    fighter.input.jump = false;
+    fighter.input.attack = false;
+    fighter.input.skill = false;
+  }
+
   void _applyKeyboardInput() {
     if (mode == 'online' || mode == 'lan') {
-      // Network mode: this device only controls its assigned player
-      // The player's slot is set by localPlayerIndex
-      // P1 (slot 0) uses WASD+J/K locally
-      // P2 (slot 1) uses arrow keys locally
       if (localPlayerIndex == 0) {
-        player1.input.left = _keysPressed.contains(LogicalKeyboardKey.keyA);
-        player1.input.right = _keysPressed.contains(LogicalKeyboardKey.keyD);
-        player1.input.up = _keysPressed.contains(LogicalKeyboardKey.keyW);
-        player1.input.down = _keysPressed.contains(LogicalKeyboardKey.keyS);
-        player1.input.jump = false; // jump deprecated for 8-direction
-        player1.input.attack = _keysPressed.contains(LogicalKeyboardKey.keyJ);
-        player1.input.skill = _keysPressed.contains(LogicalKeyboardKey.keyK);
-        // Opponent (P2) gets remote input
-        if (_hasRemoteInput) {
+        if (player1.isAlive) {
+          player1.input.left = inputSystem.keysPressed.contains(LogicalKeyboardKey.keyA);
+          player1.input.right = inputSystem.keysPressed.contains(LogicalKeyboardKey.keyD);
+          player1.input.up = inputSystem.keysPressed.contains(LogicalKeyboardKey.keyW);
+          player1.input.down = inputSystem.keysPressed.contains(LogicalKeyboardKey.keyS);
+          player1.input.jump = false;
+          player1.input.attack = inputSystem.keysPressed.contains(LogicalKeyboardKey.keyJ);
+          player1.input.skill = inputSystem.keysPressed.contains(LogicalKeyboardKey.keyK);
+        } else {
+          _clearFighterInput(player1);
+        }
+        if (_hasRemoteInput && player2.isAlive) {
           player2.input.left = _remoteInput.left;
           player2.input.right = _remoteInput.right;
           player2.input.up = _remoteInput.up;
@@ -723,17 +739,22 @@ class FighterGame extends FlameGame
           player2.input.jump = _remoteInput.jump;
           player2.input.attack = _remoteInput.attack;
           player2.input.skill = _remoteInput.skill;
+        } else if (_hasRemoteInput) {
+          _clearFighterInput(player2);
         }
       } else {
-        player2.input.left = _keysPressed.contains(LogicalKeyboardKey.arrowLeft);
-        player2.input.right = _keysPressed.contains(LogicalKeyboardKey.arrowRight);
-        player2.input.up = _keysPressed.contains(LogicalKeyboardKey.arrowUp);
-        player2.input.down = _keysPressed.contains(LogicalKeyboardKey.arrowDown);
-        player2.input.jump = false; // jump deprecated for 8-direction
-        player2.input.attack = _keysPressed.contains(LogicalKeyboardKey.numpad1);
-        player2.input.skill = _keysPressed.contains(LogicalKeyboardKey.numpad2);
-        // Opponent (P1) gets remote input
-        if (_hasRemoteInput) {
+        if (player2.isAlive) {
+          player2.input.left = inputSystem.keysPressed.contains(LogicalKeyboardKey.arrowLeft);
+          player2.input.right = inputSystem.keysPressed.contains(LogicalKeyboardKey.arrowRight);
+          player2.input.up = inputSystem.keysPressed.contains(LogicalKeyboardKey.arrowUp);
+          player2.input.down = inputSystem.keysPressed.contains(LogicalKeyboardKey.arrowDown);
+          player2.input.jump = false;
+          player2.input.attack = inputSystem.keysPressed.contains(LogicalKeyboardKey.numpad1);
+          player2.input.skill = inputSystem.keysPressed.contains(LogicalKeyboardKey.numpad2);
+        } else {
+          _clearFighterInput(player2);
+        }
+        if (_hasRemoteInput && player1.isAlive) {
           player1.input.left = _remoteInput.left;
           player1.input.right = _remoteInput.right;
           player1.input.up = _remoteInput.up;
@@ -741,36 +762,45 @@ class FighterGame extends FlameGame
           player1.input.jump = _remoteInput.jump;
           player1.input.attack = _remoteInput.attack;
           player1.input.skill = _remoteInput.skill;
+        } else if (_hasRemoteInput) {
+          _clearFighterInput(player1);
         }
       }
       return;
     }
 
-    // Player 1: WASD + JKL (for ai/local mode)
-    player1.input.left = _keysPressed.contains(LogicalKeyboardKey.keyA);
-    player1.input.right = _keysPressed.contains(LogicalKeyboardKey.keyD);
-    player1.input.up = _keysPressed.contains(LogicalKeyboardKey.keyW);
-    player1.input.down = _keysPressed.contains(LogicalKeyboardKey.keyS);
-    player1.input.jump = false; // jump deprecated for 8-direction
-    player1.input.attack = _keysPressed.contains(LogicalKeyboardKey.keyJ);
-    player1.input.skill = _keysPressed.contains(LogicalKeyboardKey.keyK);
+    if (player1.isAlive) {
+      player1.input.left = inputSystem.keysPressed.contains(LogicalKeyboardKey.keyA);
+      player1.input.right = inputSystem.keysPressed.contains(LogicalKeyboardKey.keyD);
+      player1.input.up = inputSystem.keysPressed.contains(LogicalKeyboardKey.keyW);
+      player1.input.down = inputSystem.keysPressed.contains(LogicalKeyboardKey.keyS);
+      player1.input.jump = false;
+      player1.input.attack = inputSystem.keysPressed.contains(LogicalKeyboardKey.keyJ);
+      player1.input.skill = inputSystem.keysPressed.contains(LogicalKeyboardKey.keyK);
+    } else {
+      _clearFighterInput(player1);
+    }
 
-    // Player 2: Arrow keys (only in local mode, not AI)
-    if (mode == 'local') {
-      player2.input.left = _keysPressed.contains(LogicalKeyboardKey.arrowLeft);
-      player2.input.right = _keysPressed.contains(LogicalKeyboardKey.arrowRight);
-      player2.input.up = _keysPressed.contains(LogicalKeyboardKey.arrowUp);
-      player2.input.down = _keysPressed.contains(LogicalKeyboardKey.arrowDown);
+    if (mode == 'local' && player2.isAlive) {
+      player2.input.left = inputSystem.keysPressed.contains(LogicalKeyboardKey.arrowLeft);
+      player2.input.right = inputSystem.keysPressed.contains(LogicalKeyboardKey.arrowRight);
+      player2.input.up = inputSystem.keysPressed.contains(LogicalKeyboardKey.arrowUp);
+      player2.input.down = inputSystem.keysPressed.contains(LogicalKeyboardKey.arrowDown);
       player2.input.jump = false;
-      player2.input.attack = _keysPressed.contains(LogicalKeyboardKey.numpad1);
-      player2.input.skill = _keysPressed.contains(LogicalKeyboardKey.numpad2);
+      player2.input.attack = inputSystem.keysPressed.contains(LogicalKeyboardKey.numpad1);
+      player2.input.skill = inputSystem.keysPressed.contains(LogicalKeyboardKey.numpad2);
+    } else if (mode == 'local') {
+      _clearFighterInput(player2);
     }
   }
 
   void _applyTouchInput() {
     if (touchControls == null) return;
+    if (!player1.isAlive) {
+      _clearFighterInput(player1);
+      return;
+    }
     final ti = touchControls!.input;
-    // Touch overrides keyboard for P1
     if (ti.left || ti.right || ti.jump || ti.attack || ti.skill) {
       player1.input.left = ti.left;
       player1.input.right = ti.right;
@@ -782,8 +812,8 @@ class FighterGame extends FlameGame
 
   @override
   KeyEventResult onKeyEvent(KeyEvent event, Set<LogicalKeyboardKey> keysPressed) {
-    _keysPressed.clear();
-    _keysPressed.addAll(keysPressed);
+    inputSystem.keysPressed.clear();
+    inputSystem.keysPressed.addAll(keysPressed);
 
     // Tutorial overlay intercepts all input when visible
     if (tutorialOverlay.isVisible && event is KeyDownEvent) {
@@ -824,39 +854,41 @@ class FighterGame extends FlameGame
 
   // --- Rendering: Stage + HUD ---
 
+  // Cached Paint/shader — rebuilt only on world resize (which is never with fixed 1280×600)
+  Paint? _bgPaint;
+  final Paint _groundPaint = Paint()..color = const Color(0xFF3A3A3A);
+  final Paint _linePaint = Paint()
+    ..color = const Color(0xFF666666)
+    ..strokeWidth = 2;
+  final Paint _wallPaint = Paint()..color = const Color(0xFF555555);
+
   @override
   void render(Canvas canvas) {
-    // Background gradient
-    final bgRect = Rect.fromLTWH(0, 0, stageWidth, stageHeight);
-    final bgPaint = Paint()
+    // Background gradient — cached shader
+    _bgPaint ??= Paint()
       ..shader = const LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [Color(0xFF0D0D2B), Color(0xFF1A1A3E), Color(0xFF2A1A1A)],
-      ).createShader(bgRect);
-    canvas.drawRect(bgRect, bgPaint);
+      ).createShader(Rect.fromLTWH(0, 0, stageWidth, stageHeight));
+    canvas.drawRect(Rect.fromLTWH(0, 0, stageWidth, stageHeight), _bgPaint!);
 
     // Ground
-    final groundPaint = Paint()..color = const Color(0xFF3A3A3A);
     canvas.drawRect(
       Rect.fromLTWH(0, groundY, stageWidth, stageHeight - groundY),
-      groundPaint,
+      _groundPaint,
     );
     // Ground line
-    final linePaint = Paint()
-      ..color = const Color(0xFF666666)
-      ..strokeWidth = 2;
-    canvas.drawLine(Offset(0, groundY), Offset(stageWidth, groundY), linePaint);
+    canvas.drawLine(Offset(0, groundY), Offset(stageWidth, groundY), _linePaint);
 
     // Walls
-    final wallPaint = Paint()..color = const Color(0xFF555555);
-    canvas.drawRect(Rect.fromLTWH(0, 0, wallLeft, stageHeight), wallPaint);
-    canvas.drawRect(Rect.fromLTWH(wallRight, 0, stageWidth - wallRight, stageHeight), wallPaint);
+    canvas.drawRect(Rect.fromLTWH(0, 0, wallLeft, stageHeight), _wallPaint);
+    canvas.drawRect(Rect.fromLTWH(wallRight, 0, stageWidth - wallRight, stageHeight), _wallPaint);
 
     // Render game components (fighters, projectiles, touch controls)
     super.render(canvas);
 
-    // HUD overlay
+    // Render HUD on top (health bars, skill cooldowns, combo counter, timer)
     _renderHUD(canvas);
 
     // Pause overlay
@@ -874,55 +906,51 @@ class FighterGame extends FlameGame
     // Viewport handles tutorial overlay rendering automatically
   }
 
+  // Renders HUD: health bars, player info, skill cooldowns, combo, timer, overlays
   void _renderHUD(Canvas canvas) {
     final registry = HeroRegistry.instance;
     final h1 = registry.get(player1.heroId);
     final h2 = registry.get(player2.heroId);
 
-    // 使用固定游戏世界大小，确保 HUD 始终在可见区域内
-    const marginX = stageWidth * 0.03; // 3% of game width
-    const marginY = stageHeight * 0.03; // 3% of game height
-    
-    // HUD 元素大小基于固定游戏世界
-    const barWidth = 300.0;
-    const barHeight = 20.0;
-    const barY = marginY;
-    const textSize = 28.0;
-    const infoTextSize = 14.0;
+    final w = size.x;
+    final h = size.y;
 
-    // P1 HP bar (left side) — uses smooth display HP
+    final barWidth = w * 0.18;
+    final barHeight = (h * 0.03).clamp(16.0, 24.0);
+    final marginX = w * 0.03;
+    final marginY = (h * 0.03).clamp(50.0, 80.0);
+    final barY = marginY;
+    final textSize = (w * 0.022).clamp(20.0, 32.0);
+    final infoTextSize = (w * 0.011).clamp(10.0, 16.0);
+
     _drawHPBar(canvas, marginX, barY, barWidth, barHeight,
         player1.hp, _displayHp1, player1.maxHp, player1.color, textSize: textSize);
 
-    // P2 HP bar (right side, fills from right) — uses smooth display HP
-    _drawHPBar(canvas, stageWidth - marginX - barWidth, barY, barWidth, barHeight,
+    _drawHPBar(canvas, w - marginX - barWidth, barY, barWidth, barHeight,
         player2.hp, _displayHp2, player2.maxHp, player2.color, rightAligned: true, textSize: textSize);
 
-    // Timer (centered)
     final timerText = roundTimer.ceil().toString().padLeft(2, '0');
     final timerParagraph = _buildText(timerText, textSize, const Color(0xFFFFFFFF));
-    canvas.drawParagraph(timerParagraph, Offset(stageWidth / 2 - timerParagraph.width / 2, marginY * 0.5));
+    canvas.drawParagraph(timerParagraph, Offset(w / 2 - timerParagraph.width / 2, marginY * 0.5));
 
-    // Player info blocks (below HP bars)
+    final infoWidth = (w * 0.15).clamp(150.0, 250.0);
     final infoY = barY + barHeight + marginY * 0.5;
-    _drawPlayerInfo(canvas, marginX, infoY, player1, h1, true, infoTextSize);
-    _drawPlayerInfo(canvas, stageWidth - marginX - 200, infoY, player2, h2, false, infoTextSize);
+    _drawPlayerInfo(canvas, marginX, infoY, player1, h1, true, infoTextSize, infoWidth);
+    _drawPlayerInfo(canvas, w - marginX - infoWidth, infoY, player2, h2, false, infoTextSize, infoWidth);
 
-    // Combo counters (rendered near each fighter)
     _drawComboCounter(canvas, player1, _comboDisplayCount1, _comboDisplayTimer1);
     _drawComboCounter(canvas, player2, _comboDisplayCount2, _comboDisplayTimer2);
   }
 
-  void _drawPlayerInfo(Canvas canvas, double x, double y, Fighter fighter, HeroData? hero, bool leftAligned, double textSize) {
+  void _drawPlayerInfo(Canvas canvas, double x, double y, Fighter fighter, HeroData? hero, bool leftAligned, double textSize, double infoWidth) {
     // Scale based on textSize
     final l10n = AppLocalizations.fromSystemLocale();
     final titleSize = textSize * 0.9;
     final skillSize = textSize * 0.85;
-    final infoWidth = 200 * (textSize / 14); // Scale width with text size
     
     // Hero name + title
     final titleText = hero != null ? '${hero.name} · ${hero.title}' : fighter.name;
-    final titleP = _buildText(titleText, titleSize, fighter.color.withValues(alpha: 0.9));
+    final titleP = _buildText(titleText, titleSize, fighter.color.withValues(alpha: 0.9), infoWidth);
     canvas.drawParagraph(
       titleP,
       Offset(leftAligned ? x : x + infoWidth - titleP.width, y),
@@ -932,7 +960,7 @@ class FighterGame extends FlameGame
     final skillName = hero != null ? '[K] ${hero.skillName}' : '[K] Skill';
     final skillReady = fighter.skillCooldownTimer <= 0;
     final skillColor = skillReady ? const Color(0xFF44FF44) : const Color(0xFF888888);
-    final skillP = _buildText(skillName, skillSize, skillColor);
+    final skillP = _buildText(skillName, skillSize, skillColor, infoWidth);
     canvas.drawParagraph(
       skillP,
       Offset(leftAligned ? x : x + infoWidth - skillP.width, y + textSize * 1.2),
@@ -972,17 +1000,17 @@ class FighterGame extends FlameGame
 
       // Cooldown text
       final cdText = '${fighter.skillCooldownTimer.toStringAsFixed(1)}s';
-      final cdP = _buildText(cdText, textSize * 0.7, const Color(0xFF888888));
+      final cdP = _buildText(cdText, textSize * 0.7, const Color(0xFF888888), infoWidth * 0.5);
       canvas.drawParagraph(
         cdP,
         Offset(leftAligned ? x + infoWidth * 0.51 : x + infoWidth - infoWidth * 0.51 - cdP.width, y + textSize * 2),
       );
     } else {
       // Ready pulse — slightly larger text
-      final readyP = _buildText('${l10n.ready}!', textSize * 0.8, const Color(0xFF44FF44));
+      final readyP = _buildText('${l10n.ready}!', textSize * 0.8, const Color(0xFF44FF44), infoWidth);
       canvas.drawParagraph(
         readyP,
-        Offset(leftAligned ? x : x + 200 - readyP.width, y + 28),
+        Offset(leftAligned ? x : x + infoWidth - readyP.width, y + textSize * 2),
       );
     }
   }
@@ -1043,41 +1071,40 @@ class FighterGame extends FlameGame
   void _drawComboCounter(Canvas canvas, Fighter fighter, int comboCount, double timer) {
     if (timer <= 0 || comboCount <= 0) return;
 
-    // Position above the fighter
-    final cx = fighter.position.x + Fighter.fighterWidth / 2;
-    final cy = fighter.position.y - 30;
+    final zoom = min(size.x / stageWidth, size.y / stageHeight);
+    final gameCx = fighter.position.x + Fighter.fighterWidth / 2;
+    final gameCy = fighter.position.y - 30;
+    final cx = (gameCx - stageWidth / 2) * zoom + size.x / 2;
+    final cy = (gameCy - stageHeight / 2) * zoom + size.y / 2;
 
-    // Fade out in last 0.5s
     final alpha = timer > 0.5 ? 1.0 : (timer / 0.5);
 
-    // Scale pop effect — larger when fresh
     final scale = timer > 1.2 ? 1.0 + (timer - 1.2) * 2.0 : 1.0;
     final fontSize = (16.0 * scale).clamp(16.0, 22.0);
 
     final comboText = '${comboCount}HIT';
     final color = comboCount >= 3
-        ? Color.fromRGBO(255, 200, 50, alpha)  // gold for 3+
-        : Color.fromRGBO(255, 255, 255, alpha); // white otherwise
+        ? Color.fromRGBO(255, 200, 50, alpha)
+        : Color.fromRGBO(255, 255, 255, alpha);
 
     final comboP = _buildText(comboText, fontSize, color);
-    canvas.drawParagraph(comboP, Offset(cx - 25, cy));
+    canvas.drawParagraph(comboP, Offset(cx - comboP.width / 2, cy));
   }
 
   void _renderOverlay(Canvas canvas, String title, String subtitle) {
-    // Dim background
+    final w = size.x;
+    final h = size.y;
     final dimPaint = Paint()..color = const Color(0xAA000000);
-    canvas.drawRect(Rect.fromLTWH(0, 0, stageWidth, stageHeight), dimPaint);
+    canvas.drawRect(Rect.fromLTWH(0, 0, w, h), dimPaint);
 
-    // Title
-    final titleP = _buildText(title, 48, const Color(0xFFFFFFFF));
-    canvas.drawParagraph(titleP, Offset(stageWidth / 2 - 150, stageHeight / 2 - 60));
+    final titleP = _buildText(title, 48, const Color(0xFFFFFFFF), w * 0.8);
+    canvas.drawParagraph(titleP, Offset(w / 2 - titleP.width / 2, h / 2 - 60));
 
-    // Subtitle
-    final subP = _buildText(subtitle, 18, const Color(0xFFAAAAAA));
-    canvas.drawParagraph(subP, Offset(stageWidth / 2 - 120, stageHeight / 2 + 10));
+    final subP = _buildText(subtitle, 18, const Color(0xFFAAAAAA), w * 0.6);
+    canvas.drawParagraph(subP, Offset(w / 2 - subP.width / 2, h / 2 + 10));
   }
 
-  Paragraph _buildText(String text, double fontSize, Color color) {
+  Paragraph _buildText(String text, double fontSize, Color color, [double maxWidth = 400]) {
     final builder = ParagraphBuilder(ParagraphStyle(
       textAlign: TextAlign.left,
       fontSize: fontSize,
@@ -1089,7 +1116,9 @@ class FighterGame extends FlameGame
       ))
       ..addText(text);
     final paragraph = builder.build();
-    paragraph.layout(const ParagraphConstraints(width: 300));
+    // Use dynamic width based on game world size, with fallback
+    final width = maxWidth > 0 ? maxWidth : stageWidth * 0.3;
+    paragraph.layout(ParagraphConstraints(width: width));
     return paragraph;
   }
 }

@@ -8,13 +8,13 @@ import 'package:hero_fighter/game/heroes/lubu.dart';
 import 'package:hero_fighter/game/heroes/zhuge.dart';
 import 'package:hero_fighter/game/heroes/guanyu.dart';
 import 'package:hero_fighter/game/heroes/diaochan.dart';
-import 'package:hero_fighter/game/heroes/lee_sin.dart';
-import 'package:hero_fighter/game/heroes/ashe.dart';
-import 'package:hero_fighter/game/heroes/thor.dart';
-import 'package:hero_fighter/game/heroes/thanos.dart';
-import 'package:hero_fighter/game/heroes/twisted_fate.dart';
-import 'package:hero_fighter/game/heroes/captain.dart';
-import 'package:hero_fighter/game/heroes/ironman.dart';
+import 'package:hero_fighter/game/heroes/shaolin_monk.dart';
+import 'package:hero_fighter/game/heroes/hou_yi.dart';
+import 'package:hero_fighter/game/heroes/lei_zhen_zi.dart';
+import 'package:hero_fighter/game/heroes/chi_you.dart';
+import 'package:hero_fighter/game/heroes/gui_guzi.dart';
+import 'package:hero_fighter/game/heroes/shield_general.dart';
+import 'package:hero_fighter/game/heroes/mo_hist.dart';
 
 void main() {
   // ─── All 11 heroes for iteration tests ───
@@ -214,7 +214,7 @@ void main() {
       expect(result.spinDamage, 250);
 
       for (final p in result.projectiles) {
-        expect(p.damage, 250);
+        expect(p.damage, 240);
         expect(p.type, ProjectileType.piercing);
       }
     });
@@ -240,7 +240,7 @@ void main() {
       expect(result.dashDistance, 180);
       expect(result.dashDamage, 300);
       expect(result.projectiles.first.type, ProjectileType.piercing);
-      expect(result.projectiles.first.damage, 300);
+      expect(result.projectiles.first.damage, 280);
     });
 
     test('Guanyu skill facing left has negative vx', () {
@@ -258,20 +258,20 @@ void main() {
 
       expect(result.projectiles.length, 5);
       for (final p in result.projectiles) {
-        expect(p.damage, 90);
+        expect(p.damage, 80);
         expect(p.onHitEffect, OnHitEffect.freeze);
         expect(p.effectDuration, 0.8);
       }
     });
 
-    test('Zhuge skill: 7 normal projectiles in fan', () {
+    test('Zhuge skill: 5 normal projectiles in fan', () {
       final zhuge = ZhugeHero();
       final result =
           zhuge.executeSkill(posX: 100, posY: 200, facingRight: true);
 
-      expect(result.projectiles.length, 7);
+      expect(result.projectiles.length, 5);
       for (final p in result.projectiles) {
-        expect(p.damage, 80);
+        expect(p.damage, 60);
         expect(p.type, ProjectileType.normal);
       }
     });
@@ -308,9 +308,9 @@ void main() {
       registerAllHeroes();
     });
 
-    test('registerAllHeroes registers 11 heroes', () {
+    test('registerAllHeroes registers 12 heroes', () {
       final registry = HeroRegistry.instance;
-      expect(registry.count, 11);
+      expect(registry.count, 12);
     });
 
     test('get returns correct hero by id', () {
@@ -329,13 +329,13 @@ void main() {
     test('getAll returns all registered heroes', () {
       final registry = HeroRegistry.instance;
       final all = registry.getAll();
-      expect(all.length, 11);
+      expect(all.length, 12);
     });
 
     test('ids returns all hero ids', () {
       final registry = HeroRegistry.instance;
       final ids = registry.ids;
-      expect(ids.length, 11);
+      expect(ids.length, 12);
       expect(ids, contains('lubu'));
       expect(ids, contains('zhuge'));
       expect(ids, contains('guanyu'));
@@ -357,10 +357,10 @@ void main() {
       expect(myth.length, 4);
     });
 
-    test('getByFaction warring returns 3', () {
+    test('getByFaction warring returns 4', () {
       final registry = HeroRegistry.instance;
       final war = registry.getByFaction(Faction.warring);
-      expect(war.length, 3);
+      expect(war.length, 4);
     });
 
     test('register overwrites existing hero with same id', () {

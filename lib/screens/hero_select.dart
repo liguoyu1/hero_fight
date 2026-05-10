@@ -3,8 +3,40 @@ import 'package:flutter/material.dart';
 
 import '../game/heroes/hero_data.dart';
 import '../game/heroes/hero_registry.dart';
+import '../i18n/app_localizations.dart';
 import '../network/network_manager.dart';
 import 'game_screen.dart';
+
+/// 自适应尺寸工具类
+class _AdaptiveSize {
+  final BuildContext context;
+  final double screenWidth;
+  final double screenHeight;
+  final double textScaleFactor;
+  
+  _AdaptiveSize(this.context) 
+      : screenWidth = MediaQuery.of(context).size.width,
+        screenHeight = MediaQuery.of(context).size.height,
+        textScaleFactor = MediaQuery.textScaleFactorOf(context);
+  
+  /// 自适应字体大小
+  double fontSize(double base) => base * textScaleFactor * (screenWidth / 375).clamp(0.85, 1.2);
+  
+  /// 自适应间距
+  double spacing(double base) => base * (screenWidth / 375).clamp(0.8, 1.3);
+  
+  /// 自适应图标大小
+  double iconSize(double base) => base * (screenWidth / 375).clamp(0.8, 1.2);
+  
+  /// 是否是小屏幕手机
+  bool get isSmallScreen => screenWidth < 375;
+  
+  /// 是否是中屏幕手机
+  bool get isMediumScreen => screenWidth >= 375 && screenWidth < 414;
+  
+  /// 是否是大屏幕手机
+  bool get isLargeScreen => screenWidth >= 414;
+}
 
 /// Faction display configuration
 const Map<Faction, _FactionDisplay> _factionDisplay = {
@@ -238,23 +270,25 @@ class _HeroSelectScreenState extends State<HeroSelectScreen>
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.fromSystemLocale();
     final isP1 = !_isNetworkMode && _selectionPhase == 0;
 
     String title;
     String subtitle;
     if (_isNetworkMode) {
-      title = _mySlot == 0 ? 'Player 1 - Select Hero' : 'Player 2 - Select Hero';
-      subtitle = 'Choose your hero, then click "Ready"';
+      title = _mySlot == 0 ? l10n.player1SelectHero : l10n.player2SelectHero;
+      subtitle = l10n.chooseHeroThenReady;
     } else if (widget.mode == 'ai') {
-      title = 'Select Your Hero';
-      subtitle = 'AI will auto-select opponent';
+      title = l10n.selectYourHero;
+      subtitle = l10n.aiAutoSelect;
     } else {
-      title = isP1 ? 'Select Your Hero' : 'Select Opponent Hero';
+      title = isP1 ? l10n.selectYourHero : l10n.selectOpponentHero;
       subtitle = isP1
-          ? 'Player 1, choose your hero'
-          : 'Player 2, choose your hero';
+          ? l10n.player1ChooseHero
+          : l10n.player2ChooseHero;
     }
 
+    final adaptive = _AdaptiveSize(context);
     final allReady = _isNetworkMode &&
         _p1Ready &&
         _p2Ready &&
@@ -287,7 +321,7 @@ class _HeroSelectScreenState extends State<HeroSelectScreen>
                   _p2HeroId != null)
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 300),
-                  height: 3,
+                  height: adaptive.spacing(3),
                   color: allReady
                       ? const Color(0xFF4CAF50)
                       : Colors.white.withValues(alpha: 0.08),
@@ -314,9 +348,13 @@ class _HeroSelectScreenState extends State<HeroSelectScreen>
   }
 
   Widget _buildHeaderBar(String title) {
+    final adaptive = _AdaptiveSize(context);
+    final headerHeight = adaptive.isSmallScreen ? 40.0 : 
+                        adaptive.isMediumScreen ? 44.0 : 48.0;
+    
     return Container(
-      height: 44,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
+      height: headerHeight,
+      padding: EdgeInsets.symmetric(horizontal: adaptive.spacing(8)),
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.35),
         border: Border(
@@ -326,25 +364,28 @@ class _HeroSelectScreenState extends State<HeroSelectScreen>
       child: Row(
         children: [
           IconButton(
-            iconSize: 22,
+            iconSize: adaptive.iconSize(22),
             padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            constraints: BoxConstraints(
+              minWidth: adaptive.spacing(36), 
+              minHeight: adaptive.spacing(36),
+            ),
             icon: const Icon(Icons.arrow_back, color: Colors.white70),
             onPressed: () {
               _network?.leaveRoom();
               Navigator.pop(context);
             },
           ),
-          const SizedBox(width: 4),
+          SizedBox(width: adaptive.spacing(4)),
           Expanded(
             child: Text(
               title,
-              style: const TextStyle(
+              style: TextStyle(
                 color: Colors.white,
-                fontSize: 16,
+                fontSize: adaptive.fontSize(16),
                 fontWeight: FontWeight.w700,
                 letterSpacing: 1.2,
-                shadows: [
+                shadows: const [
                   Shadow(color: Color(0xAAFF6B35), blurRadius: 8),
                 ],
               ),
@@ -356,9 +397,14 @@ class _HeroSelectScreenState extends State<HeroSelectScreen>
   }
 
   Widget _buildPickSummary(String subtitle) {
+    final adaptive = _AdaptiveSize(context);
+    final l10n = AppLocalizations.fromSystemLocale();
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: EdgeInsets.symmetric(
+        horizontal: adaptive.spacing(12), 
+        vertical: adaptive.spacing(6),
+      ),
       color: Colors.black.withValues(alpha: 0.18),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -366,21 +412,22 @@ class _HeroSelectScreenState extends State<HeroSelectScreen>
           Expanded(
             child: Text(
               subtitle,
-              style: const TextStyle(
+              style: TextStyle(
                 color: Colors.white60,
-                fontSize: 12,
+                fontSize: adaptive.fontSize(12),
               ),
             ),
           ),
           // Pick chips
-          if (_isNetworkMode) ..._buildNetworkPicks(),
+          if (_isNetworkMode) ..._buildNetworkPicks(adaptive, l10n),
           if (!_isNetworkMode) ...[
             if (_p1HeroId != null)
-              _buildPickChip('P1', _p1HeroId!, Colors.lightBlueAccent),
+              _buildPickChip(adaptive, l10n.player1, _p1HeroId!, Colors.lightBlueAccent),
             if (_p2HeroId != null) ...[
-              const SizedBox(width: 6),
+              SizedBox(width: adaptive.spacing(6)),
               _buildPickChip(
-                widget.mode == 'ai' ? 'AI' : 'P2',
+                adaptive,
+                widget.mode == 'ai' ? l10n.aiLabel : l10n.player2,
                 _p2HeroId!,
                 Colors.orangeAccent,
               ),
@@ -391,7 +438,7 @@ class _HeroSelectScreenState extends State<HeroSelectScreen>
     );
   }
 
-  List<Widget> _buildNetworkPicks() {
+  List<Widget> _buildNetworkPicks(_AdaptiveSize adaptive, AppLocalizations l10n) {
     final myHeroId = _mySlot == 0 ? _p1HeroId : _p2HeroId;
     final myReady = _mySlot == 0 ? _p1Ready : _p2Ready;
     final myColor =
@@ -399,36 +446,43 @@ class _HeroSelectScreenState extends State<HeroSelectScreen>
     final oppColor =
         _mySlot == 0 ? Colors.orangeAccent : Colors.lightBlueAccent;
     return [
-      _buildPickChipNetwork('You', myHeroId, myColor, myReady),
-      const SizedBox(width: 6),
-      _buildPickChipNetwork('Opponent', _opponentHeroId, oppColor, _opponentReady),
+      _buildPickChip(adaptive, l10n.you, myHeroId, myColor, myReady),
+      SizedBox(width: adaptive.spacing(6)),
+      _buildPickChipNetwork(adaptive, l10n.opponent, _opponentHeroId, oppColor, _opponentReady),
     ];
   }
 
-  Widget _buildPickChip(String label, String heroId, Color color) {
+  Widget _buildPickChip(_AdaptiveSize adaptive, String label, String? heroId, Color color, [bool ready = false]) {
+    if (heroId == null) return const SizedBox.shrink();
     final hero = HeroRegistry.instance.get(heroId);
     if (hero == null) return const SizedBox.shrink();
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: EdgeInsets.symmetric(
+        horizontal: adaptive.spacing(8), 
+        vertical: adaptive.spacing(4),
+      ),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withValues(alpha: 0.5)),
+        color: color.withValues(alpha: ready ? 0.18 : 0.12),
+        borderRadius: BorderRadius.circular(adaptive.spacing(14)),
+        border: Border.all(
+          color: ready ? const Color(0xFF4CAF50) : color.withValues(alpha: 0.5),
+          width: ready ? 1.5 : 1,
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 8,
-            height: 8,
+            width: adaptive.spacing(8),
+            height: adaptive.spacing(8),
             decoration: BoxDecoration(color: hero.color, shape: BoxShape.circle),
           ),
-          const SizedBox(width: 5),
+          SizedBox(width: adaptive.spacing(5)),
           Text(
             '$label · ${hero.name}',
             style: TextStyle(
-              color: color,
-              fontSize: 11,
+              color: ready ? const Color(0xFF81C784) : color,
+              fontSize: adaptive.fontSize(11),
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -438,14 +492,18 @@ class _HeroSelectScreenState extends State<HeroSelectScreen>
   }
 
   Widget _buildPickChipNetwork(
-      String label, String? heroId, Color color, bool ready) {
+      _AdaptiveSize adaptive, String label, String? heroId, Color color, bool ready) {
+    final l10n = AppLocalizations.fromSystemLocale();
     final hero = heroId != null ? HeroRegistry.instance.get(heroId) : null;
-    final name = hero?.name ?? 'Not Selected';
+    final name = hero?.name ?? l10n.notSelected;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: EdgeInsets.symmetric(
+        horizontal: adaptive.spacing(8), 
+        vertical: adaptive.spacing(4),
+      ),
       decoration: BoxDecoration(
         color: color.withValues(alpha: ready ? 0.18 : 0.10),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(adaptive.spacing(14)),
         border: Border.all(
           color: ready
               ? const Color(0xFF4CAF50)
@@ -458,15 +516,15 @@ class _HeroSelectScreenState extends State<HeroSelectScreen>
         children: [
           Icon(
             ready ? Icons.check_circle : Icons.radio_button_unchecked,
-            size: 12,
+            size: adaptive.iconSize(12),
             color: ready ? const Color(0xFF81C784) : color,
           ),
-          const SizedBox(width: 4),
+          SizedBox(width: adaptive.spacing(4)),
           Text(
             '$label · $name',
             style: TextStyle(
               color: ready ? const Color(0xFF81C784) : color,
-              fontSize: 11,
+              fontSize: adaptive.fontSize(11),
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -476,8 +534,13 @@ class _HeroSelectScreenState extends State<HeroSelectScreen>
   }
 
   Widget _buildFactionTabs() {
+    final adaptive = _AdaptiveSize(context);
+    final l10n = AppLocalizations.fromSystemLocale();
+    final tabHeight = adaptive.isSmallScreen ? 34.0 : 
+                        adaptive.isMediumScreen ? 38.0 : 42.0;
+    
     return Container(
-      height: 38,
+      height: tabHeight,
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.25),
         border: Border(
@@ -487,21 +550,27 @@ class _HeroSelectScreenState extends State<HeroSelectScreen>
       child: TabBar(
         controller: _tabController,
         indicatorColor: const Color(0xFFFF6B35),
-        indicatorWeight: 2.5,
+        indicatorWeight: adaptive.spacing(2.5),
         labelColor: Colors.white,
         unselectedLabelColor: Colors.white54,
-        labelStyle:
-            const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        labelStyle: TextStyle(
+          fontSize: adaptive.fontSize(13), 
+          fontWeight: FontWeight.w600,
+        ),
         tabs: [
-          for (final entry in _factionDisplay.entries)
+          for (final faction in Faction.values)
             Tab(
-              height: 36,
+              height: tabHeight - 2,
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(entry.value.icon, size: 14, color: entry.value.color),
-                  const SizedBox(width: 5),
-                  Text(entry.value.label),
+                  Icon(
+                    _factionDisplay[faction]!.icon, 
+                    size: adaptive.iconSize(14), 
+                    color: _factionDisplay[faction]!.color,
+                  ),
+                  SizedBox(width: adaptive.spacing(5)),
+                  Text(_factionLabel(faction, l10n)),
                 ],
               ),
             ),
@@ -510,11 +579,30 @@ class _HeroSelectScreenState extends State<HeroSelectScreen>
     );
   }
 
+  String _factionLabel(Faction faction, AppLocalizations l10n) {
+    switch (faction) {
+      case Faction.threeKingdoms:
+        return l10n.threeKingdoms;
+      case Faction.mythology:
+        return l10n.mythologyLabel;
+      case Faction.warring:
+        return l10n.warringStates;
+    }
+  }
+
   Widget _buildReadyButton() {
+    final adaptive = _AdaptiveSize(context);
+    final l10n = AppLocalizations.fromSystemLocale();
     final myReady = _mySlot == 0 ? _p1Ready : _p2Ready;
     final hasMyHero = (_mySlot == 0 ? _p1HeroId : _p2HeroId) != null;
+    final buttonHeight = adaptive.isSmallScreen ? 38.0 : 
+                          adaptive.isMediumScreen ? 42.0 : 46.0;
+    
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: EdgeInsets.symmetric(
+        horizontal: adaptive.spacing(12),
+        vertical: adaptive.spacing(8),
+      ),
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.3),
         border: Border(
@@ -523,12 +611,15 @@ class _HeroSelectScreenState extends State<HeroSelectScreen>
       ),
       child: SizedBox(
         width: double.infinity,
-        height: 42,
+        height: buttonHeight,
         child: ElevatedButton.icon(
           onPressed: () {
             if (!hasMyHero) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Please select a hero first')),
+                SnackBar(content: Text(
+                  l10n.pleaseSelectHero,
+                  style: TextStyle(fontSize: adaptive.fontSize(14)),
+                )),
               );
               return;
             }
@@ -536,12 +627,15 @@ class _HeroSelectScreenState extends State<HeroSelectScreen>
           },
           icon: Icon(
             myReady ? Icons.check_circle : Icons.check_circle_outline,
-            size: 18,
+            size: adaptive.iconSize(18),
           ),
           label: Text(
-            myReady ? 'Ready (Waiting...)' : 'Ready',
-            style: const TextStyle(
-                fontSize: 14, fontWeight: FontWeight.w700, letterSpacing: 1.0),
+            myReady ? l10n.readyWaiting : l10n.ready,
+            style: TextStyle(
+              fontSize: adaptive.fontSize(14),
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.0,
+            ),
           ),
           style: ElevatedButton.styleFrom(
             backgroundColor: myReady
@@ -550,7 +644,7 @@ class _HeroSelectScreenState extends State<HeroSelectScreen>
             foregroundColor: Colors.white,
             elevation: myReady ? 6 : 2,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(adaptive.spacing(10)),
             ),
           ),
         ),
@@ -561,15 +655,44 @@ class _HeroSelectScreenState extends State<HeroSelectScreen>
   Widget _buildHeroGrid(List<HeroData> heroes) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Wider screens get more columns. Landscape phones → 4-5 cols.
-        final cols = (constraints.maxWidth / 150).floor().clamp(3, 6);
+        final adaptive = _AdaptiveSize(context);
+        final screenWidth = constraints.maxWidth;
+        
+        // 完全自适应的列数计算
+        int cols;
+        double childAspectRatio;
+        
+        // 根据屏幕宽度动态计算列数
+        if (screenWidth < 320) {
+          cols = 2;
+          childAspectRatio = 0.72;
+        } else if (screenWidth < 375) {
+          cols = 2;
+          childAspectRatio = 0.75;
+        } else if (screenWidth < 414) {
+          cols = 3;
+          childAspectRatio = 0.78;
+        } else if (screenWidth < 500) {
+          cols = 3;
+          childAspectRatio = 0.80;
+        } else if (screenWidth < 600) {
+          cols = 4;
+          childAspectRatio = 0.82;
+        } else {
+          cols = 5;
+          childAspectRatio = 0.85;
+        }
+        
         return GridView.builder(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          padding: EdgeInsets.symmetric(
+            horizontal: adaptive.spacing(10),
+            vertical: adaptive.spacing(8),
+          ),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: cols,
-            childAspectRatio: 0.78,
-            crossAxisSpacing: 8,
-            mainAxisSpacing: 8,
+            childAspectRatio: childAspectRatio,
+            crossAxisSpacing: adaptive.spacing(8),
+            mainAxisSpacing: adaptive.spacing(8),
           ),
           itemCount: heroes.length,
           itemBuilder: (context, index) => _buildHeroCard(heroes[index]),
@@ -579,6 +702,8 @@ class _HeroSelectScreenState extends State<HeroSelectScreen>
   }
 
   Widget _buildHeroCard(HeroData hero) {
+    final adaptive = _AdaptiveSize(context);
+    final l10n = AppLocalizations.fromSystemLocale();
     final isSelected = hero.id == _p1HeroId || hero.id == _p2HeroId;
     final isMine = _isNetworkMode
         ? hero.id == (_mySlot == 0 ? _p1HeroId : _p2HeroId)
@@ -616,7 +741,7 @@ class _HeroSelectScreenState extends State<HeroSelectScreen>
                     Colors.black.withValues(alpha: 0.45),
                   ],
                 ),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(adaptive.spacing(10)),
                 border: Border.all(
                   color: isSelected
                       ? hero.color
@@ -629,13 +754,13 @@ class _HeroSelectScreenState extends State<HeroSelectScreen>
                   if (isMine)
                     BoxShadow(
                       color: hero.color.withValues(alpha: glowStrength * 0.6),
-                      blurRadius: 18,
+                      blurRadius: adaptive.spacing(18),
                       spreadRadius: 1,
                     ),
                   if (isHovered && !isMine)
                     BoxShadow(
                       color: Colors.white.withValues(alpha: 0.15),
-                      blurRadius: 10,
+                      blurRadius: adaptive.spacing(10),
                     ),
                 ],
               ),
@@ -643,7 +768,7 @@ class _HeroSelectScreenState extends State<HeroSelectScreen>
             );
           },
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(adaptive.spacing(10)),
             child: Stack(
               children: [
                 Column(
@@ -664,12 +789,17 @@ class _HeroSelectScreenState extends State<HeroSelectScreen>
                             ],
                           ),
                         ),
-                        child: Center(child: _buildHeroAvatar(hero)),
+                        child: Center(child: _buildHeroAvatar(hero, adaptive)),
                       ),
                     ),
                     // Hero info
                     Container(
-                      padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+                      padding: EdgeInsets.fromLTRB(
+                        adaptive.spacing(8),
+                        adaptive.spacing(6),
+                        adaptive.spacing(8),
+                        adaptive.spacing(8),
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.black.withValues(alpha: 0.35),
                       ),
@@ -678,33 +808,34 @@ class _HeroSelectScreenState extends State<HeroSelectScreen>
                         children: [
                           Text(
                             hero.name,
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: Colors.white,
-                              fontSize: 15,
+                              fontSize: adaptive.fontSize(15),
                               fontWeight: FontWeight.w800,
                               letterSpacing: 0.4,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
+                          SizedBox(height: adaptive.spacing(2)),
                           Text(
                             hero.title,
                             style: TextStyle(
                               color: hero.color.withValues(alpha: 0.95),
-                              fontSize: 10,
+                              fontSize: adaptive.fontSize(10),
                               fontWeight: FontWeight.w500,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                          const SizedBox(height: 5),
-                          _buildStatRow('HP', hero.hp.toInt(), 1500,
+                          SizedBox(height: adaptive.spacing(5)),
+                          _buildStatRow(adaptive, 'HP', hero.hp.toInt(), 1500,
                               const Color(0xFFFF5252)),
-                          const SizedBox(height: 2),
-                          _buildStatRow('ATK', hero.attackPower.toInt(), 200,
+                          SizedBox(height: adaptive.spacing(2)),
+                          _buildStatRow(adaptive, 'ATK', hero.attackPower.toInt(), 200,
                               const Color(0xFFFFB74D)),
-                          const SizedBox(height: 2),
-                          _buildStatRow('SPD', hero.speed.toInt(), 250,
+                          SizedBox(height: adaptive.spacing(2)),
+                          _buildStatRow(adaptive, 'SPD', hero.speed.toInt(), 250,
                               const Color(0xFF4FC3F7)),
                         ],
                       ),
@@ -714,25 +845,26 @@ class _HeroSelectScreenState extends State<HeroSelectScreen>
                 // "MINE" badge
                 if (isMine)
                   Positioned(
-                    top: 6,
-                    right: 6,
+                    top: adaptive.spacing(6),
+                    right: adaptive.spacing(6),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
+                      padding: EdgeInsets.symmetric(
+                          horizontal: adaptive.spacing(6), 
+                          vertical: adaptive.spacing(2)),
                       decoration: BoxDecoration(
                         color: hero.color,
-                        borderRadius: BorderRadius.circular(6),
+                        borderRadius: BorderRadius.circular(adaptive.spacing(6)),
                         boxShadow: [
                           BoxShadow(
                               color: hero.color.withValues(alpha: 0.7),
-                              blurRadius: 6),
+                              blurRadius: adaptive.spacing(6)),
                         ],
                       ),
-                      child: const Text(
-                        'PICKED',
+                      child: Text(
+                        l10n.picked,
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: 9,
+                          fontSize: adaptive.fontSize(9),
                           fontWeight: FontWeight.w800,
                           letterSpacing: 0.6,
                         ),
@@ -747,17 +879,20 @@ class _HeroSelectScreenState extends State<HeroSelectScreen>
     );
   }
 
-  Widget _buildStatRow(String label, int value, int maxValue, Color color) {
+  Widget _buildStatRow(_AdaptiveSize adaptive, String label, int value, int maxValue, Color color) {
     final ratio = (value / maxValue).clamp(0.0, 1.0);
+    final labelWidth = adaptive.isSmallScreen ? 24.0 : 28.0;
+    final valueWidth = adaptive.isSmallScreen ? 26.0 : 32.0;
+    
     return Row(
       children: [
         SizedBox(
-          width: 26,
+          width: labelWidth,
           child: Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               color: Colors.white60,
-              fontSize: 9,
+              fontSize: adaptive.fontSize(9),
               fontWeight: FontWeight.w600,
               letterSpacing: 0.3,
             ),
@@ -767,25 +902,25 @@ class _HeroSelectScreenState extends State<HeroSelectScreen>
           child: Stack(
             children: [
               Container(
-                height: 5,
+                height: adaptive.spacing(5),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.06),
-                  borderRadius: BorderRadius.circular(3),
+                  borderRadius: BorderRadius.circular(adaptive.spacing(3)),
                 ),
               ),
               FractionallySizedBox(
                 widthFactor: ratio,
                 child: Container(
-                  height: 5,
+                  height: adaptive.spacing(5),
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [color.withValues(alpha: 0.7), color],
                     ),
-                    borderRadius: BorderRadius.circular(3),
+                    borderRadius: BorderRadius.circular(adaptive.spacing(3)),
                     boxShadow: [
                       BoxShadow(
                         color: color.withValues(alpha: 0.5),
-                        blurRadius: 3,
+                        blurRadius: adaptive.spacing(3),
                       ),
                     ],
                   ),
@@ -794,15 +929,15 @@ class _HeroSelectScreenState extends State<HeroSelectScreen>
             ],
           ),
         ),
-        const SizedBox(width: 4),
+        SizedBox(width: adaptive.spacing(4)),
         SizedBox(
-          width: 28,
+          width: valueWidth,
           child: Text(
             '$value',
             textAlign: TextAlign.right,
-            style: const TextStyle(
+            style: TextStyle(
               color: Colors.white70,
-              fontSize: 9,
+              fontSize: adaptive.fontSize(9),
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -811,9 +946,14 @@ class _HeroSelectScreenState extends State<HeroSelectScreen>
     );
   }
 
-  Widget _buildHeroAvatar(HeroData hero) {
+  Widget _buildHeroAvatar(HeroData hero, _AdaptiveSize adaptive) {
     final factionIcon =
         _factionDisplay[hero.faction]?.icon ?? Icons.person;
+    final avatarSize = adaptive.isSmallScreen ? 40.0 : 
+                        adaptive.isMediumScreen ? 44.0 : 50.0;
+    final iconSize = adaptive.isSmallScreen ? 50.0 : 64.0;
+    final fontSize = adaptive.fontSize(22);
+    
     return Stack(
       alignment: Alignment.center,
       children: [
@@ -821,12 +961,12 @@ class _HeroSelectScreenState extends State<HeroSelectScreen>
         Icon(
           factionIcon,
           color: hero.color.withValues(alpha: 0.25),
-          size: 64,
+          size: iconSize,
         ),
         // Avatar circle
         Container(
-          width: 46,
-          height: 46,
+          width: avatarSize,
+          height: avatarSize,
           decoration: BoxDecoration(
             gradient: RadialGradient(
               colors: [
@@ -835,19 +975,24 @@ class _HeroSelectScreenState extends State<HeroSelectScreen>
               ],
             ),
             shape: BoxShape.circle,
-            border: Border.all(color: Colors.white.withValues(alpha: 0.8), width: 2),
+            border: Border.all(
+                color: Colors.white.withValues(alpha: 0.8), 
+                width: 2),
             boxShadow: [
-              BoxShadow(color: hero.color, blurRadius: 10, spreadRadius: 1),
+              BoxShadow(
+                  color: hero.color, 
+                  blurRadius: adaptive.spacing(10), 
+                  spreadRadius: 1),
             ],
           ),
           child: Center(
             child: Text(
               hero.name.isNotEmpty ? hero.name[0] : '?',
-              style: const TextStyle(
+              style: TextStyle(
                 color: Colors.white,
-                fontSize: 22,
+                fontSize: fontSize,
                 fontWeight: FontWeight.w900,
-                shadows: [
+                shadows: const [
                   Shadow(color: Colors.black, blurRadius: 6),
                 ],
               ),

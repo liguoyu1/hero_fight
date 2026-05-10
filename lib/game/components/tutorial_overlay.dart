@@ -4,6 +4,8 @@ import 'package:flame/components.dart';
 import 'package:flame/events.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../i18n/app_localizations.dart';
+
 /// 新手引导覆盖层 — 4步教学：移动→攻击→技能→开战
 ///
 /// 首次进入战斗时自动显示，完成后通过 SharedPreferences 记录，
@@ -21,33 +23,41 @@ class TutorialOverlay extends PositionComponent with TapCallbacks {
   double _fadeAlpha = 0;
   static const double _fadeSpeed = 4.0; // 每秒淡入速度
 
-  // 步骤内容
-  static const List<_TutorialStep> _steps = [
-    _TutorialStep(
-      title: 'Step 1: Move',
-      descKeyboard: 'WASD to move\nArrow keys for 8 directions',
-      descTouch: 'Left virtual joystick\nDrag to move',
-      icon: '🕹️',
-    ),
-    _TutorialStep(
-      title: 'Step 2: Attack',
-      descKeyboard: 'J to attack\nTap repeatedly for combos',
-      descTouch: 'Right Attack button\nTap for combos',
-      icon: '⚔️',
-    ),
-    _TutorialStep(
-      title: 'Step 3: Skill',
-      descKeyboard: 'K for hero skill\nWatch the cooldown',
-      descTouch: 'Right Skill button\nUse after cooldown',
-      icon: '✨',
-    ),
-    _TutorialStep(
-      title: 'Ready to Fight!',
-      descKeyboard: 'Defeat your opponent\nESC to pause',
-      descTouch: 'Defeat your opponent\nGood luck!',
-      icon: '🏆',
-    ),
-  ];
+  AppLocalizations? _l10n;
+
+  // 步骤内容 — initialized via init()
+  late List<_TutorialStep> _steps;
+
+  /// Initialize with localized strings. Must be called before checkAndShow().
+  void init(AppLocalizations l10n) {
+    _l10n = l10n;
+    _steps = [
+      _TutorialStep(
+        title: l10n.tutorialStep1Title,
+        descKeyboard: l10n.tutorialStep1Keyboard,
+        descTouch: l10n.tutorialStep1Touch,
+        icon: '🕹️',
+      ),
+      _TutorialStep(
+        title: l10n.tutorialStep2Title,
+        descKeyboard: l10n.tutorialStep2Keyboard,
+        descTouch: l10n.tutorialStep2Touch,
+        icon: '⚔️',
+      ),
+      _TutorialStep(
+        title: l10n.tutorialStep3Title,
+        descKeyboard: l10n.tutorialStep3Keyboard,
+        descTouch: l10n.tutorialStep3Touch,
+        icon: '✨',
+      ),
+      _TutorialStep(
+        title: l10n.tutorialStep4Title,
+        descKeyboard: l10n.tutorialStep4Keyboard,
+        descTouch: l10n.tutorialStep4Touch,
+        icon: '🏆',
+      ),
+    ];
+  }
 
   /// 检查是否需要显示引导，如果需要则显示
   Future<void> checkAndShow() async {
@@ -183,6 +193,8 @@ class TutorialOverlay extends PositionComponent with TapCallbacks {
     // 步骤指示器 (圆点)
     _drawStepIndicator(canvas, screenW, panelY + panelH - 30);
 
+    final l10n = _l10n ?? AppLocalizations(languageCode: 'zh');
+
     // 标题
     _drawText(
       canvas,
@@ -198,7 +210,7 @@ class TutorialOverlay extends PositionComponent with TapCallbacks {
     // 简化处理：同时显示键盘和触屏说明
     _drawText(
       canvas,
-      '⌨️ 键盘',
+      l10n.tutorialKeyboard,
       panelX + 40,
       panelY + 75,
       fontSize: 14,
@@ -216,7 +228,7 @@ class TutorialOverlay extends PositionComponent with TapCallbacks {
 
     _drawText(
       canvas,
-      '📱 触屏',
+      l10n.tutorialTouch,
       panelX + panelW / 2 + 20,
       panelY + 75,
       fontSize: 14,
@@ -235,7 +247,7 @@ class TutorialOverlay extends PositionComponent with TapCallbacks {
     // 底部提示
     _drawText(
       canvas,
-      'Tap to continue  |  ESC to skip',
+      l10n.tutorialHint,
       screenW / 2,
       panelY + panelH + 20,
       fontSize: 13,
@@ -280,6 +292,7 @@ class TutorialOverlay extends PositionComponent with TapCallbacks {
     double fontSize = 16,
     Color color = const Color(0xFFFFFFFF),
     bool center = false,
+    double maxWidth = 0,
   }) {
     final builder = ParagraphBuilder(ParagraphStyle(
       textAlign: center ? TextAlign.center : TextAlign.left,
@@ -287,8 +300,10 @@ class TutorialOverlay extends PositionComponent with TapCallbacks {
     ))
       ..pushStyle(TextStyle(color: color, fontSize: fontSize))
       ..addText(text);
-    final paragraph = builder.build()
-      ..layout(const ParagraphConstraints(width: 400));
+    final paragraph = builder.build();
+    // Use dynamic width: specified maxWidth, or 80% of screen width
+    final width = maxWidth > 0 ? maxWidth : (size.x * 0.8).clamp(300.0, 800.0);
+    paragraph.layout(ParagraphConstraints(width: width));
     final dx = center ? x - paragraph.maxIntrinsicWidth / 2 : x;
     canvas.drawParagraph(paragraph, Offset(dx, y));
   }

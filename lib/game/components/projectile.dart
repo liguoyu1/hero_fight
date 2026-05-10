@@ -44,10 +44,11 @@ class Projectile extends PositionComponent {
 
   bool expired = false;
 
-  static const double wallLeft = 0;
-  static const double wallRight = 1280;
-  static const double groundY = 600;
-  static const double ceilingY = -50;
+  // Game world boundaries (fixed 1280×600 world, matched to FighterGame)
+  static const double worldLeft = 0;
+  static const double worldRight = 1280;
+  static const double worldGroundY = 600;
+  static const double worldCeilingY = -50;
 
   Projectile({
     required this.owner,
@@ -101,43 +102,37 @@ class Projectile extends PositionComponent {
       _trail.removeAt(0);
     }
 
-    // Screen-wrap boundary checks
+    // Boundary checks — destroy on exit (no wrap-around)
     final cx = position.x + radius;
     final cy = position.y + radius;
 
     if (type == ProjectileType.bouncing) {
-      // Bouncing: still reflect off edges, but use game-area bounds
-      if (cx <= wallLeft || cx >= wallRight) {
+      // Bouncing: reflect off edges within game-area bounds
+      if (cx <= worldLeft || cx >= worldRight) {
         direction.x = -direction.x;
-        if (cx <= wallLeft) {
-          position.x = wallLeft;
+        if (cx <= worldLeft) {
+          position.x = worldLeft;
         } else {
-          position.x = wallRight - radius * 2;
+          position.x = worldRight - radius * 2;
         }
         bouncesLeft--;
       }
-      if (cy <= ceilingY || cy >= groundY) {
+      if (cy <= worldCeilingY || cy >= worldGroundY) {
         direction.y = -direction.y;
-        if (cy <= ceilingY) {
-          position.y = ceilingY;
+        if (cy <= worldCeilingY) {
+          position.y = worldCeilingY;
         } else {
-          position.y = groundY - radius * 2;
+          position.y = worldGroundY - radius * 2;
         }
         bouncesLeft--;
       }
       if (bouncesLeft <= 0) expired = true;
     } else {
-      // Normal/homing/piercing: wrap around screen edges
+      // Normal/homing/piercing: destroy when leaving game world
       final margin = radius * 2;
-      if (cx < wallLeft - margin) {
-        position.x = wallRight - radius;
-      } else if (cx > wallRight + margin) {
-        position.x = wallLeft - radius;
-      }
-      if (cy < ceilingY - margin) {
-        position.y = groundY - radius;
-      } else if (cy > groundY + margin) {
-        position.y = ceilingY - radius;
+      if (cx < worldLeft - margin || cx > worldRight + margin ||
+          cy < worldCeilingY - margin || cy > worldGroundY + margin) {
+        expired = true;
       }
     }
   }
@@ -180,43 +175,52 @@ class Projectile extends PositionComponent {
     return false;
   }
 
+  // Cached Paint objects — reused every frame to avoid GC pressure
+  final Paint _paint = Paint();
+  final Paint _glowPaint = Paint();
+  final Paint _trailPaint = Paint();
+  final Paint _highlightPaint = Paint()..color = const Color(0x66FFFFFF);
+  final Paint _ringPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.5;
+
   @override
   void render(Canvas canvas) {
     super.render(canvas);
     if (expired) return;
 
-    final paint = Paint()..color = color;
-    final glowPaint = Paint()
-      ..color = color.withValues(alpha: 0.3)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+    // Render culling: skip if projectile is outside stage bounds (1280×600)
+    final margin = radius * 3;
+    if (position.x + size.x < -margin || position.x > 1280 + margin ||
+        position.y + size.y < -margin || position.y > 600 + margin) {
+      return;
+    }
+
+    _paint.color = color;
+    // Glow without MaskFilter.blur (GPU-heavy on mobile) — use alpha + larger radius instead
+    _glowPaint.color = color.withValues(alpha: 0.15);
 
     // Trail
     for (int i = 0; i < _trail.length; i++) {
       final alpha = (i / _trail.length) * 0.4;
       final trailSize = radius * (0.3 + 0.5 * i / _trail.length);
-      final trailPaint = Paint()
-        ..color = color.withValues(alpha: alpha);
-      // Convert world position to local
+      _trailPaint.color = color.withValues(alpha: alpha);
       final localX = _trail[i].dx - position.x;
       final localY = _trail[i].dy - position.y;
-      canvas.drawCircle(Offset(localX, localY), trailSize, trailPaint);
+      canvas.drawCircle(Offset(localX, localY), trailSize, _trailPaint);
     }
 
-    // Glow
-    canvas.drawCircle(Offset(radius, radius), radius + 4, glowPaint);
+    // Glow (soft outer ring to replace blur)
+    canvas.drawCircle(Offset(radius, radius), radius + 4, _glowPaint);
 
     switch (shape) {
       case ProjectileShape.circle:
-        canvas.drawCircle(Offset(radius, radius), radius, paint);
+        canvas.drawCircle(Offset(radius, radius), radius, _paint);
         // Inner highlight
-        final highlightPaint = Paint()..color = const Color(0x66FFFFFF);
-        canvas.drawCircle(Offset(radius - 2, radius - 2), radius * 0.4, highlightPaint);
+        canvas.drawCircle(Offset(radius - 2, radius - 2), radius * 0.4, _highlightPaint);
         // Outer ring
-        final ringPaint = Paint()
-          ..color = color.withValues(alpha: 0.5)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.5;
-        canvas.drawCircle(Offset(radius, radius), radius + 1, ringPaint);
+        _ringPaint.color = color.withValues(alpha: 0.5);
+        canvas.drawCircle(Offset(radius, radius), radius + 1, _ringPaint);
         break;
       case ProjectileShape.rect:
         canvas.drawRRect(
@@ -224,14 +228,8 @@ class Projectile extends PositionComponent {
             Rect.fromLTWH(0, 0, radius * 2, radius * 2),
             const Radius.circular(3),
           ),
-          paint,
+          _paint,
         );
-        // Inner glow line
-        final linePaint = Paint()
-          ..color = const Color(0x44FFFFFF)
-          ..strokeWidth = 2;
-        canvas.drawLine(
-          Offset(radius * 0.3, radius), Offset(radius * 1.7, radius), linePaint);
         break;
       case ProjectileShape.diamond:
         final path = Path()
@@ -240,16 +238,7 @@ class Projectile extends PositionComponent {
           ..lineTo(radius, radius * 2)
           ..lineTo(0, radius)
           ..close();
-        canvas.drawPath(path, paint);
-        // Inner highlight
-        final innerPath = Path()
-          ..moveTo(radius, radius * 0.3)
-          ..lineTo(radius * 1.5, radius)
-          ..lineTo(radius, radius * 1.7)
-          ..lineTo(radius * 0.5, radius)
-          ..close();
-        final innerPaint = Paint()..color = const Color(0x33FFFFFF);
-        canvas.drawPath(innerPath, innerPaint);
+        canvas.drawPath(path, _paint);
         break;
     }
   }

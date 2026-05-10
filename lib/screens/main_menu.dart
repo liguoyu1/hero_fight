@@ -2,6 +2,8 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../data/nickname.dart';
+import '../i18n/app_localizations.dart';
+import '../game/components/tutorial_overlay.dart';
 import 'nickname_dialog.dart';
 
 class MainMenuScreen extends StatefulWidget {
@@ -16,6 +18,7 @@ class _MainMenuState extends State<MainMenuScreen> with TickerProviderStateMixin
   late AnimationController _titleController;
   late Animation<double> _titleScale;
   String? _nickname;
+  bool _soundEnabled = true;
 
   @override
   void initState() {
@@ -53,6 +56,56 @@ class _MainMenuState extends State<MainMenuScreen> with TickerProviderStateMixin
       await saveNickname(name);
       setState(() => _nickname = name);
     }
+  }
+
+  void _showSettings(BuildContext context) {
+    final l10n = AppLocalizations.fromSystemLocale();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A1A),
+        title: Text(l10n.settings, style: const TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SwitchListTile(
+              title: Text(l10n.soundEffects, style: const TextStyle(color: Colors.white70, fontSize: 14)),
+              value: _soundEnabled,
+              activeThumbColor: Colors.redAccent,
+              onChanged: (val) => setState(() => _soundEnabled = val),
+            ),
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: () async {
+                await TutorialOverlay.resetTutorial();
+                if (ctx.mounted) {
+                  Navigator.pop(ctx);
+                  Navigator.pushNamed(context, '/game', arguments: {
+                    'hero1': 'lubu',
+                    'hero2': 'zhuge',
+                    'mode': 'ai',
+                  });
+                }
+              },
+              icon: const Icon(Icons.replay, size: 18, color: Colors.amber),
+              label: const Text('Replay Tutorial',
+                  style: TextStyle(color: Colors.amber, fontSize: 14)),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(l10n.version, style: const TextStyle(color: Colors.white38, fontSize: 12)),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(l10n.ok, style: const TextStyle(color: Colors.redAccent)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -188,7 +241,7 @@ class _MainMenuState extends State<MainMenuScreen> with TickerProviderStateMixin
                         ),
                       IconButton(
                         icon: const Icon(Icons.settings, color: Colors.white54, size: 28),
-                        onPressed: () {},
+                        onPressed: () => _showSettings(context),
                       ),
                     ],
                   ),

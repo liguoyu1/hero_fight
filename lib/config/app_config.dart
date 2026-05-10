@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 
 /// 应用配置
 /// 修改此文件即可切换本地/生产环境
@@ -45,6 +44,13 @@ class AppConfig {
   
   /// 心跳间隔
   static const Duration heartbeatInterval = Duration(seconds: 10);
+
+  // ==================== 安全配置 ====================
+
+  /// 应用密钥 — 用于游戏战绩 API 的 HMAC-SHA256 签名
+  /// ⚠️ 生产环境必须通过环境变量或安全存储注入，不应硬编码在源码中
+  /// 服务端对应环境变量: APP_SECRET
+  static const String? appSecret = null; // TODO: 部署时注入真实密钥
 }
 
 /// 环境类型

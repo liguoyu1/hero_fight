@@ -193,8 +193,8 @@ class TouchControls extends PositionComponent with DragCallbacks, TapCallbacks {
     super.render(canvas);
 
     // Joystick base
-    final basePaint = Paint()..color = const Color(0x44FFFFFF);
-    final knobPaint = Paint()..color = const Color(0x88FFFFFF);
+    final basePaint = Paint()..color = const Color(0x66FFFFFF);
+    final knobPaint = Paint()..color = const Color(0xBBFFFFFF);
     final center = _joystickActive ? _joystickCenter : _joyPos;
     canvas.drawCircle(center.toOffset(), joystickRadius, basePaint);
     final knob = _joystickActive ? _joystickKnob : _joyPos;

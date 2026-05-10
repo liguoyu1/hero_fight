@@ -58,6 +58,7 @@ class NetworkManager {
   void Function(LanServer server)? onLanServerFound;
   void Function(Map<String, dynamic> status)? onMatchmakingStatus;
   void Function(Map<String, dynamic> data)? onMatchFound;
+  void Function(Map<String, dynamic> data)? onResyncState;
 
   // Public getters
   ConnectionState get state => _state;
@@ -141,6 +142,9 @@ class NetworkManager {
       _currentRoomId = (data['room'] as Map<String, dynamic>?)?['id'] as String?;
       _mySlot = data['slot'] as int? ?? 0;
       onMatchFound?.call(data);
+    }));
+    _subs.add(_client.onResyncState.listen((data) {
+      onResyncState?.call(data);
     }));
     _subs.add(_client.onLanServerFound.listen((data) {
       final server = LanServer(

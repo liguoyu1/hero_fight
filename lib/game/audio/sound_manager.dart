@@ -12,7 +12,12 @@ class SoundManager {
   SoundManager._();
 
   bool _initialized = false;
+  bool _enabled = true;
   SynthAudio? _synth;
+
+  /// Enable or disable all sound effects
+  void setEnabled(bool enabled) => _enabled = enabled;
+  bool get isEnabled => _enabled;
 
   /// Initialize audio. On web, sets up SynthAudio. On mobile/desktop, sets up flame_audio.
   Future<void> init() async {
@@ -46,56 +51,60 @@ class SoundManager {
 
   // ─── Attack sounds (hero-aware) ───
 
+  void _play(void Function() fn) {
+    if (_enabled) fn();
+  }
+
   /// Light hit with hero pitch.
   void playLightHit({String heroId = ''}) {
-    _synth?.playLightHit(pitch: SynthAudio.heroPitch(heroId));
+    _play(() => _synth?.playLightHit(pitch: SynthAudio.heroPitch(heroId)));
   }
 
   /// Heavy hit with hero pitch.
   void playHeavyHit({String heroId = ''}) {
-    _synth?.playHeavyHit(pitch: SynthAudio.heroPitch(heroId));
+    _play(() => _synth?.playHeavyHit(pitch: SynthAudio.heroPitch(heroId)));
   }
 
   /// Combo finisher with hero pitch.
   void playComboFinisher({String heroId = ''}) {
-    _synth?.playComboFinisher(pitch: SynthAudio.heroPitch(heroId));
+    _play(() => _synth?.playComboFinisher(pitch: SynthAudio.heroPitch(heroId)));
   }
 
   // ─── Skill sounds ───
 
   void playSkill({String heroId = ''}) {
-    _synth?.playSkill(pitch: SynthAudio.heroPitch(heroId));
+    _play(() => _synth?.playSkill(pitch: SynthAudio.heroPitch(heroId)));
   }
 
   void playProjectile({String heroId = ''}) {
-    _synth?.playProjectile(pitch: SynthAudio.heroPitch(heroId));
+    _play(() => _synth?.playProjectile(pitch: SynthAudio.heroPitch(heroId)));
   }
 
   // ─── Hurt / Death ───
 
   void playHurt({String heroId = ''}) {
-    _synth?.playHurt(pitch: SynthAudio.heroPitch(heroId));
+    _play(() => _synth?.playHurt(pitch: SynthAudio.heroPitch(heroId)));
   }
 
-  void playDeath() => _synth?.playDeath();
+  void playDeath() => _play(() => _synth?.playDeath());
 
   // ─── Status effects ───
 
-  void playFreeze() => _synth?.playFreeze();
-  void playStun() => _synth?.playStun();
+  void playFreeze() => _play(() => _synth?.playFreeze());
+  void playStun() => _play(() => _synth?.playStun());
 
   // ─── Movement ───
 
-  void playJump() => _synth?.playJump();
-  void playLand() => _synth?.playLand();
+  void playJump() => _play(() => _synth?.playJump());
+  void playLand() => _play(() => _synth?.playLand());
 
   // ─── UI / Round ───
 
-  void playRoundStart() => _synth?.playRoundStart();
-  void playWin() => _synth?.playWin();
-  void playMenuSelect() => _synth?.playMenuSelect();
+  void playRoundStart() => _play(() => _synth?.playRoundStart());
+  void playWin() => _play(() => _synth?.playWin());
+  void playMenuSelect() => _play(() => _synth?.playMenuSelect());
 
-  // ─── Legacy compatibility (deprecated — use specific methods) ───
+  // ─── Legacy compatibility ───
 
-  void playAttack() => _synth?.playLightHit();
+  void playAttack() => _play(() => _synth?.playLightHit());
 }

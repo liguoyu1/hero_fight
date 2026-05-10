@@ -82,16 +82,16 @@ class HouyiHero extends HeroData {
       ProjectileConfig(
         x: posX + dir * 30,
         y: posY,
-        vx: dir * 600,
+        vx: dir * 480, // Reduced 20% from 600 for balance
         vy: 0,
-        damage: 250,
+        damage: skillDamage,
         lifetime: 3.0,
         color: const Color(0xFF88EEFF),
         width: 40,
         height: 16,
         type: ProjectileType.piercing,
         onHitEffect: OnHitEffect.freeze,
-        effectDuration: 2.0,
+        effectDuration: 0.8, // Reduced from 2.0 for balance
       ),
     ];
     return SkillResult(projectiles: projectiles);

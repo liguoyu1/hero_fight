@@ -68,5 +68,8 @@ List<pj.Projectile> applySkillEffect(
     owner.velocity.x = dir * result.dashDistance / 0.15;
   }
 
+  // Clamp position after dash to prevent hero from going off screen
+  owner.checkStageBoundaries();
+
   return projectiles;
 }

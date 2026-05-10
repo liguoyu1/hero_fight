@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:math';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../config/app_config.dart';
@@ -297,76 +296,81 @@ class _MatchingScreenState extends State<MatchingScreen>
                     index: i,
                     controller: _spinController,
                   )),
-                  // Main content - centered and constrained
+                  // Main content
                   Positioned.fill(
-                    child: SingleChildScrollView(
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          minHeight: constraints.maxHeight,
-                        ),
-                        child: Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const SizedBox(height: 40),
-
-                              // Mode indicator
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.08),
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      widget.mode == 'lan' ? Icons.wifi : Icons.public,
-                                      color: Colors.white54,
-                                      size: 16,
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      widget.mode == 'lan' ? l10n.lanMatch : l10n.onlineMatch,
-                                      style: const TextStyle(color: Colors.white54, fontSize: 13),
-                                    ),
-                                  ],
-                                ),
+                    child: Column(
+                      children: [
+                        // Scrollable content area
+                        Expanded(
+                          child: SingleChildScrollView(
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                minHeight: constraints.maxHeight - 100, // Reserve space for button
                               ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const SizedBox(height: 40),
 
-                              const SizedBox(height: 60),
+                                  // Mode indicator
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(alpha: 0.08),
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          widget.mode == 'lan' ? Icons.wifi : Icons.public,
+                                          color: Colors.white54,
+                                          size: 16,
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          widget.mode == 'lan' ? l10n.lanMatch : l10n.onlineMatch,
+                                          style: const TextStyle(color: Colors.white54, fontSize: 13),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
 
-                              // Animated search icon
-                              _buildAnimatedIcon(),
+                                  const SizedBox(height: 60),
 
-                              const SizedBox(height: 40),
+                                  // Animated search icon
+                                  _buildAnimatedIcon(),
 
-                              // Status text
-                              Text(
-                                _statusText + '.' * _dots,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w500,
-                                ),
+                                  const SizedBox(height: 40),
+
+                                  // Status text
+                                  Text(
+                                    _statusText + '.' * _dots,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+
+                                  const SizedBox(height: 12),
+
+                                  // Extra info based on state
+                                  _buildStateInfo(),
+
+                                  const SizedBox(height: 40),
+                                ],
                               ),
-
-                              const SizedBox(height: 12),
-
-                              // Extra info based on state
-                              _buildStateInfo(),
-
-                              const SizedBox(height: 50),
-
-                              // Action buttons
-                              _buildActionButtons(),
-
-                              const SizedBox(height: 40),
-                            ],
+                            ),
                           ),
                         ),
-                      ),
+                        // Fixed bottom area for action buttons
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                          child: _buildActionButtons(),
+                        ),
+                      ],
                     ),
                   ),
                 ],

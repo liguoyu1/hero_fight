@@ -25,7 +25,7 @@ void main() {
 
     test('Skill damage calculation', () {
       final zhuge = ZhugeHero();
-      expect(zhuge.skillDamage, 80.0);
+      expect(zhuge.skillDamage, 60.0);
     });
 
     test('Defense reduces damage correctly', () {

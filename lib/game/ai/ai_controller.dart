@@ -1,4 +1,3 @@
-import 'dart:math';
 
 import '../components/fighter.dart';
 import '../utils/game_random.dart';
@@ -100,6 +99,7 @@ class AiController {
     }
 
     final dist = _distanceTo(opponent);
+    final toBottom = opponent.position.y > fighter.position.y;
     final hpRatio = fighter.hp / fighter.maxHp;
     final oppHpRatio = opponent.hp / opponent.maxHp;
     final skillReady = fighter.canUseSkill;
@@ -136,9 +136,14 @@ class AiController {
       return;
     }
 
-    // Priority 5: melee attack when in range
+    // Priority 5: melee attack when in range — add directional variety
     if (dist < _meleeRange && fighter.canAttack) {
-      _currentAction = _AiAction.attack;
+      if (_rng.nextDouble() < 0.15) {
+        // 15% chance: directional attack based on relative position
+        _currentAction = toBottom ? _AiAction.upAttack : _AiAction.forwardAttack;
+      } else {
+        _currentAction = _AiAction.attack;
+      }
       return;
     }
 
@@ -148,7 +153,15 @@ class AiController {
       return;
     }
 
-    // Priority 6: approach when far
+    // Priority 7: dodge incoming projectiles/skills by jumping
+    if (oppAttacking && dist > _meleeRange && dist < _approachRange) {
+      if (_rng.nextDouble() < _dodgeChance * 0.5) {
+        _currentAction = _AiAction.dodgeUp;
+        return;
+      }
+    }
+
+    // Priority 8: approach when far
     if (dist > _meleeRange) {
       // Occasionally hover-approach from above for variety
       if (dist > _approachRange && _rng.nextDouble() < 0.2) {
@@ -159,7 +172,7 @@ class AiController {
       return;
     }
 
-    // Priority 7: back off if too close (avoid clipping)
+    // Priority 9: back off if too close (avoid clipping)
     if (dist < _tooCloseRange) {
       _currentAction = _rng.nextDouble() < 0.5 ? _AiAction.attack : _AiAction.retreat;
       return;
@@ -194,12 +207,19 @@ class AiController {
       case _AiAction.dodgeUp:
         _moveToward(!toRight);
         _moveVertToward(false); // move up to dodge
+        fighter.input.jump = true; // also jump to evade projectiles
       case _AiAction.hoverApproach:
         _moveToward(toRight);
         _moveVertToward(false); // approach from above
       case _AiAction.comboAttackSkill:
         fighter.input.attack = true;
         fighter.input.skill = true;
+      case _AiAction.upAttack:
+        fighter.input.up = true;
+        fighter.input.attack = true;
+      case _AiAction.forwardAttack:
+        _moveToward(toRight);
+        fighter.input.attack = true;
     }
   }
 
@@ -244,4 +264,6 @@ enum _AiAction {
   dodgeUp,
   hoverApproach,
   comboAttackSkill,
+  upAttack,
+  forwardAttack,
 }

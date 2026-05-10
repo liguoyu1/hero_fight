@@ -4,6 +4,7 @@ const WebSocket = require('ws');
 const { v4: uuidv4 } = require('uuid');
 const dgram = require('dgram');
 const path = require('path');
+const crypto = require('crypto');
 const db = require('./db');
 
 const app = express();
@@ -16,9 +17,53 @@ const HEARTBEAT_INTERVAL = 10000;
 const IDLE_ROOM_TIMEOUT = 300000;
 const MAX_PLAYERS = 2;
 
-// 静态文件服务（如果需要）
-// app.use(express.static(path.join(__dirname, '..', 'build', 'web')));
+// ======================== HMAC Signature Verification ========================
+const APP_SECRET = process.env.APP_SECRET || (console.warn('WARNING: Using default APP_SECRET — set APP_SECRET env var for production'), 'hero-fighter-secret-key-2024-dev-only');
+
+function sortedStringify(obj) {
+  if (obj === null || typeof obj !== 'object') return JSON.stringify(obj);
+  if (Array.isArray(obj)) return '[' + obj.map(sortedStringify).join(',') + ']';
+  const keys = Object.keys(obj).sort();
+  const pairs = keys.map(k => JSON.stringify(k) + ':' + sortedStringify(obj[k]));
+  return '{' + pairs.join(',') + '}';
+}
+
+function computeSignature(payload, secret) {
+  return crypto.createHmac('sha256', secret).update(payload).digest('hex');
+}
+
+function verifySignature(body) {
+  const { signature, ...data } = body;
+  if (!signature) return { valid: false, error: 'Missing signature' };
+  const payload = sortedStringify(data);
+  const expected = computeSignature(payload, APP_SECRET);
+  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
+    return { valid: false, error: 'Invalid signature' };
+  }
+  return { valid: true, data };
+}
+
+// ======================== Shared State ========================
+const rooms = new Map();
+const clients = new Map();
+const wsById = new Map();
+const matchmakingQueue = [];
+const disconnectedClients = new Map(); // deviceId -> { client, roomId, timeout }
+const DISCONNECT_GRACE_PERIOD = 30000; // 30s grace period for reconnection
+
+// ======================== Module Imports ========================
+const roomMgr = require('./room-manager')({ MAX_PLAYERS, clients, wsById, rooms });
+const matchmaker = require('./matchmaker')({ matchmakingQueue, rooms, wsById, Room });
+
+const { Room, send, broadcast, getRoomList, removePlayerFromRoom, startCleanup } = roomMgr;
+const { removeFromMatchmakingQueue, tryMatchPlayers } = matchmaker;
+
+// ======================== HTTP API ========================
 app.use(express.json());
+
+// Static pages: privacy policy + support
+app.get('/privacy', (req, res) => res.sendFile(path.join(__dirname, 'public', 'privacy.html')));
+app.get('/support', (req, res) => res.sendFile(path.join(__dirname, 'public', 'support.html')));
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', rooms: rooms.size, clients: clients.size, queue: matchmakingQueue.length });
@@ -52,21 +97,20 @@ app.get('/api/recent/:playerId', async (req, res) => {
   }
 });
 
-// 接收客户端发送的游戏记录（AI/本地模式）
 app.post('/api/game_record', async (req, res) => {
   try {
-    const { player1Id, player2Id, player1Hero, player2Hero, winnerId, player1Name, player2Name, gameMode } = req.body;
-    
+    const verification = verifySignature(req.body);
+    if (!verification.valid) {
+      return res.status(403).json({ error: verification.error });
+    }
+    const data = verification.data;
+    const { player1Id, player2Id, player1Hero, player2Hero, winnerId, player1Name, player2Name, gameMode } = data;
     if (!player1Id || !player2Id) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
-    
     const roomId = `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
     await db.recordGame({
-      roomId,
-      player1Id,
-      player2Id,
+      roomId, player1Id, player2Id,
       player1Hero: player1Hero || 'unknown',
       player2Hero: player2Hero || 'unknown',
       winnerId,
@@ -74,7 +118,6 @@ app.post('/api/game_record', async (req, res) => {
       player2Name: player2Name || 'Player 2',
       gameMode: gameMode || 'local',
     });
-    
     res.json({ success: true });
   } catch (e) {
     console.error('Failed to save game record:', e.message);
@@ -82,109 +125,7 @@ app.post('/api/game_record', async (req, res) => {
   }
 });
 
-const rooms = new Map();
-const clients = new Map();
-const wsById = new Map(); // clientId -> ws (reverse lookup)
-const matchmakingQueue = []; // Array of { ws, client }
-
-class Room {
-  constructor(id, name, hostId) {
-    this.id = id;
-    this.name = name;
-    this.hostId = hostId;
-    this.players = new Map();
-    this.state = 'waiting';
-    this.createdAt = Date.now();
-    this.lastActivity = Date.now();
-  }
-  isFull() { return this.players.size >= MAX_PLAYERS; }
-  toJSON() {
-    const players = [];
-    for (const [cid, p] of this.players) {
-      players.push({ clientId: cid, name: p.name, heroId: p.heroId, ready: p.ready, slot: p.slot });
-    }
-    return { id: this.id, name: this.name, hostId: this.hostId, playerCount: this.players.size, maxPlayers: MAX_PLAYERS, state: this.state, players };
-  }
-}
-
-function send(ws, type, data = {}) {
-  if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type, ...data }));
-}
-
-function broadcast(room, type, data = {}, excludeWs = null) {
-  for (const [cid] of room.players) {
-    const ws = wsById.get(cid);
-    if (ws && ws !== excludeWs) send(ws, type, data);
-  }
-}
-
-function getRoomList() {
-  const list = [];
-  for (const [, room] of rooms) list.push(room.toJSON());
-  return list;
-}
-
-function removePlayerFromRoom(clientId) {
-  for (const [roomId, room] of rooms) {
-    if (!room.players.has(clientId)) continue;
-    room.players.delete(clientId);
-    room.lastActivity = Date.now();
-    if (room.players.size === 0) {
-      rooms.delete(roomId);
-      console.log(`Room ${roomId} deleted (empty)`);
-    } else {
-      if (room.hostId === clientId) {
-        room.hostId = room.players.keys().next().value;
-        broadcast(room, 'host_changed', { hostId: room.hostId });
-      }
-      broadcast(room, 'player_left', { clientId, playerCount: room.players.size });
-      if (room.state === 'playing') {
-        room.state = 'finished';
-        broadcast(room, 'game_end', { reason: 'opponent_disconnected' });
-      }
-    }
-    return roomId;
-  }
-  return null;
-}
-
-function removeFromMatchmakingQueue(ws) {
-  const idx = matchmakingQueue.findIndex(e => e.ws === ws);
-  if (idx !== -1) {
-    matchmakingQueue.splice(idx, 1);
-    console.log(`Removed from matchmaking queue. Queue size: ${matchmakingQueue.length}`);
-    return true;
-  }
-  return false;
-}
-
-function tryMatchPlayers() {
-  while (matchmakingQueue.length >= 2) {
-    const p1 = matchmakingQueue.shift();
-    const p2 = matchmakingQueue.shift();
-    if (!p1 || !p2) break;
-
-    const roomId = uuidv4().substring(0, 8);
-    const room = new Room(roomId, `Match ${roomId}`, p1.client.id);
-
-    const p1Info = { clientId: p1.client.id, name: p1.playerName || 'Player 1', heroId: null, ready: false, slot: 0 };
-    const p2Info = { clientId: p2.client.id, name: p2.playerName || 'Player 2', heroId: null, ready: false, slot: 1 };
-
-    room.players.set(p1.client.id, p1Info);
-    room.players.set(p2.client.id, p2Info);
-    rooms.set(roomId, room);
-
-    p1.client.roomId = roomId;
-    p2.client.roomId = roomId;
-
-    console.log(`Match found! Room ${roomId}: ${p1.client.id} vs ${p2.client.id}`);
-
-    send(p1.ws, 'match_found', { room: room.toJSON(), slot: 0, opponentName: p2.playerName || 'Player 2' });
-    send(p2.ws, 'match_found', { room: room.toJSON(), slot: 1, opponentName: p1.playerName || 'Player 1' });
-  }
-}
-
-// --- WebSocket Connection Handler ---
+// ======================== WebSocket Handler ========================
 wss.on('connection', (ws, req) => {
   const clientId = uuidv4();
   const clientData = { id: clientId, deviceId: null, roomId: null, alive: true, lastPong: Date.now() };
@@ -204,7 +145,27 @@ wss.on('connection', (ws, req) => {
     const c = clients.get(ws);
     if (c) {
       removeFromMatchmakingQueue(ws);
-      removePlayerFromRoom(c.id);
+      // Save disconnected state for 30s grace period
+      if (c.deviceId && c.roomId) {
+        const room = rooms.get(c.roomId);
+        if (room && room.state === 'playing') {
+          disconnectedClients.set(c.deviceId, {
+            client: { ...c },
+            roomId: c.roomId,
+            timeout: setTimeout(() => {
+              const dc = disconnectedClients.get(c.deviceId);
+              if (dc) {
+                removePlayerFromRoom(dc.client.id);
+                disconnectedClients.delete(c.deviceId);
+                console.log(`Disconnect grace expired for ${c.deviceId}`);
+              }
+            }, DISCONNECT_GRACE_PERIOD),
+          });
+          console.log(`Client ${c.deviceId} disconnected (grace period started, room ${c.roomId})`);
+        }
+      } else {
+        removePlayerFromRoom(c.id);
+      }
       wsById.delete(c.id);
       clients.delete(ws);
       console.log(`Disconnected: ${c.id}`);
@@ -231,16 +192,39 @@ function handleMessage(ws, client, msg) {
         db.getOrCreatePlayer(msg.deviceId, msg.nickname || 'Player')
           .then(() => console.log(`Player registered: ${msg.deviceId}`))
           .catch(err => console.error(`Failed to create player ${msg.deviceId}:`, err.message));
-      } else {
-        console.warn('register_device: no deviceId provided');
+
+        // Check for reconnection — restore previous client state
+        const dc = disconnectedClients.get(msg.deviceId);
+        if (dc) {
+          clearTimeout(dc.timeout);
+          disconnectedClients.delete(msg.deviceId);
+          // Restore room membership
+          const room = rooms.get(dc.roomId);
+          if (room) {
+            client.roomId = dc.roomId;
+            const player = room.players.get(dc.client.id);
+            if (player) {
+              // Update clientId mapping to new connection
+              room.players.delete(dc.client.id);
+              player.clientId = client.id;
+              room.players.set(client.id, player);
+              send(ws, 'resync_state', {
+                roomId: dc.roomId,
+                state: room.state,
+                slot: player.slot,
+                heroId: player.heroId,
+              });
+              broadcast(room, 'player_reconnected', { clientId: client.id, slot: player.slot });
+              console.log(`Client ${msg.deviceId} reconnected to room ${dc.roomId}`);
+            }
+          }
+        }
       }
       break;
     }
-
     case 'room_list':
       send(ws, 'room_list', { rooms: getRoomList() });
       break;
-
     case 'create_room': {
       removePlayerFromRoom(client.id);
       const roomId = uuidv4().substring(0, 8);
@@ -253,7 +237,6 @@ function handleMessage(ws, client, msg) {
       console.log(`Room created: ${roomId}`);
       break;
     }
-
     case 'join_room': {
       const room = rooms.get(msg.roomId);
       if (!room) return send(ws, 'error', { message: 'Room not found' });
@@ -269,35 +252,27 @@ function handleMessage(ws, client, msg) {
       console.log(`Player joined room ${msg.roomId}`);
       break;
     }
-
     case 'leave_room': {
       const rid = removePlayerFromRoom(client.id);
       client.roomId = null;
       send(ws, 'room_left', { roomId: rid });
       break;
     }
-
-    // --- Matchmaking ---
     case 'start_matchmaking': {
-      // Remove from any existing room first
       if (client.roomId) removePlayerFromRoom(client.id);
       client.roomId = null;
-      // Remove any existing queue entry
       removeFromMatchmakingQueue(ws);
-      // Add to queue
       matchmakingQueue.push({ ws, client, playerName: msg.playerName || 'Player' });
       send(ws, 'matchmaking_status', { status: 'queued', position: matchmakingQueue.length });
       console.log(`Matchmaking queue: ${matchmakingQueue.length} player(s) waiting`);
       tryMatchPlayers();
       break;
     }
-
     case 'cancel_matchmaking': {
-      const removed = removeFromMatchmakingQueue(ws);
+      removeFromMatchmakingQueue(ws);
       send(ws, 'matchmaking_status', { status: 'cancelled' });
       break;
     }
-
     case 'select_hero': {
       const room = rooms.get(client.roomId);
       if (!room || !room.players.has(client.id)) return;
@@ -309,7 +284,6 @@ function handleMessage(ws, client, msg) {
       broadcast(room, 'hero_selected', { clientId: client.id, heroId: msg.heroId, slot: p.slot });
       break;
     }
-
     case 'player_ready': {
       const room = rooms.get(client.roomId);
       if (!room || !room.players.has(client.id)) return;
@@ -326,72 +300,51 @@ function handleMessage(ws, client, msg) {
       }
       break;
     }
-
     case 'game_input': {
       const room = rooms.get(client.roomId);
       if (!room || room.state !== 'playing') return;
-      if (msg.frame === undefined || !msg.inputs) return;
+      if (typeof msg.frame !== 'number' || !msg.inputs) return;
+      if (client.lastFrame && msg.frame <= client.lastFrame) return;
+      const validInputs = ['left', 'right', 'up', 'down', 'jump', 'attack', 'skill'];
+      for (const key of validInputs) {
+        if (msg.inputs[key] !== undefined && typeof msg.inputs[key] !== 'boolean') return;
+      }
+      client.lastFrame = msg.frame;
       room.lastActivity = Date.now();
       broadcast(room, 'game_input', { clientId: client.id, frame: msg.frame, inputs: msg.inputs }, ws);
       break;
     }
-
     case 'game_end': {
       const room = rooms.get(client.roomId);
       if (!room) return;
-      
-      // 防止重复记录：检查房间是否已完成
       if (room.state === 'finished') {
         console.log(`Game end already processed for room ${room.id}`);
         return;
       }
-      
       room.state = 'finished';
       room.lastActivity = Date.now();
       broadcast(room, 'game_end', { reason: msg.reason || 'game_over', winnerId: msg.winnerId });
-
       const playerArr = [...room.players.values()];
       if (playerArr.length === 2) {
-        const p1 = playerArr[0];
-        const p2 = playerArr[1];
-        const ws1 = wsById.get(p1.clientId);
-        const ws2 = wsById.get(p2.clientId);
-        const c1 = ws1 ? clients.get(ws1) : null;
-        const c2 = ws2 ? clients.get(ws2) : null;
-        const d1 = c1?.deviceId || p1.clientId;
-        const d2 = c2?.deviceId || p2.clientId;
-        
-        // 获取游戏模式（从消息中获取，默认为 online）
-        const gameMode = msg.gameMode || 'online';
-        
-        // 映射 winnerId：如果是 slot (0/1)，转换为 deviceId
+        const p1 = playerArr[0], p2 = playerArr[1];
+        const ws1 = wsById.get(p1.clientId), ws2 = wsById.get(p2.clientId);
+        const c1 = ws1 ? clients.get(ws1) : null, c2 = ws2 ? clients.get(ws2) : null;
+        const d1 = c1?.deviceId || p1.clientId, d2 = c2?.deviceId || p2.clientId;
         let winnerDeviceId = null;
         if (msg.winnerId !== null && msg.winnerId !== undefined) {
-          const winnerIdStr = String(msg.winnerId);
-          if (winnerIdStr === '0' || winnerIdStr === p1.clientId) {
-            winnerDeviceId = d1;
-          } else if (winnerIdStr === '1' || winnerIdStr === p2.clientId) {
-            winnerDeviceId = d2;
-          }
+          const wid = String(msg.winnerId);
+          if (wid === '0' || wid === p1.clientId) winnerDeviceId = d1;
+          else if (wid === '1' || wid === p2.clientId) winnerDeviceId = d2;
         }
-        
         db.recordGame({
-          roomId: room.id,
-          player1Id: d1,
-          player2Id: d2,
-          player1Hero: p1.heroId || 'unknown',
-          player2Hero: p2.heroId || 'unknown',
+          roomId: room.id, player1Id: d1, player2Id: d2,
+          player1Hero: p1.heroId || 'unknown', player2Hero: p2.heroId || 'unknown',
           winnerId: winnerDeviceId,
-          player1Name: p1.name || 'Player 1',
-          player2Name: p2.name || 'Player 2',
-          gameMode: gameMode,
-        }).then(() => {
-          console.log(`Game recorded (${gameMode}): ${d1} vs ${d2}`);
-        }).catch((e) => {
-          console.error('Failed to record game:', e.message);
-        });
+          player1Name: p1.name || 'Player 1', player2Name: p2.name || 'Player 2',
+          gameMode: msg.gameMode || 'online',
+        }).then(() => console.log(`Game recorded (${msg.gameMode || 'online'}): ${d1} vs ${d2}`))
+          .catch(e => console.error('Failed to record game:', e.message));
       }
-
       setTimeout(() => {
         if (rooms.has(room.id)) {
           room.state = 'waiting';
@@ -400,25 +353,45 @@ function handleMessage(ws, client, msg) {
       }, 3000);
       break;
     }
+    case 'request_resync': {
+      // Client requests state resync after reconnection
+      const dc = msg.deviceId ? disconnectedClients.get(msg.deviceId) : null;
+      if (dc) {
+        const room = rooms.get(dc.roomId);
+        if (room) {
+          const player = room.players.get(dc.client.id);
+          send(ws, 'resync_state', {
+            roomId: dc.roomId,
+            state: room ? room.state : 'unknown',
+            slot: player ? player.slot : null,
+            heroId: player ? player.heroId : null,
+          });
+          return;
+        }
+      }
+      send(ws, 'resync_state', { state: 'not_found' });
+      break;
+    }
+
+    case 'ping':
+      // Echo back as pong for RTT measurement
+      send(ws, 'pong', { 'timestamp': msg.timestamp });
+      break;
 
     default:
       send(ws, 'error', { message: `Unknown type: ${msg.type}` });
   }
 }
 
-// --- Heartbeat ---
+// ======================== Heartbeat ========================
 const heartbeat = setInterval(() => {
   const now = Date.now();
   const toRemove = [];
   for (const [ws, info] of clients) {
-    if (ws.readyState !== WebSocket.OPEN) {
-      toRemove.push({ ws, info });
-      continue;
-    }
+    if (ws.readyState !== WebSocket.OPEN) { toRemove.push({ ws, info }); continue; }
     try { ws.ping(); } catch (e) {}
-    const lastPong = info.lastPong || 0;
-    if (now - lastPong > HEARTBEAT_INTERVAL * 2) {
-      console.log(`Client ${info.id} timed out (no pong)`);
+    if (now - (info.lastPong || 0) > HEARTBEAT_INTERVAL * 2) {
+      console.log(`Client ${info.id} timed out`);
       try { ws.terminate(); } catch (e) {}
       toRemove.push({ ws, info });
     }
@@ -430,51 +403,51 @@ const heartbeat = setInterval(() => {
   }
 }, HEARTBEAT_INTERVAL);
 
-// --- Idle Room Cleanup ---
-const cleanup = setInterval(() => {
-  const now = Date.now();
-  for (const [id, room] of rooms) {
-    if (now - room.lastActivity > IDLE_ROOM_TIMEOUT) {
-      broadcast(room, 'room_closed', { reason: 'idle_timeout' });
-      rooms.delete(id);
-      console.log(`Room ${id} cleaned up (idle)`);
-    }
-  }
-}, 60000);
+// ======================== Idle Room Cleanup ========================
+startCleanup(60000, IDLE_ROOM_TIMEOUT);
 
-// --- UDP LAN Discovery ---
+// ======================== UDP LAN Discovery ========================
 const udpServer = dgram.createSocket({ type: 'udp4', reuseAddr: true });
-udpServer.on('message', (msg, rinfo) => {
+udpServer.on('listening', () => {
+  const addr = udpServer.address();
+  console.log(`UDP LAN discovery listening on ${addr.address}:${addr.port}`);
+});
+udpServer.on('message', (raw, rinfo) => {
   try {
-    const data = JSON.parse(msg.toString());
-    if (data.type === 'lan_discover') {
-      const response = JSON.stringify({ type: 'lan_discover_response', port: PORT, name: 'Hero Fighter Server', rooms: rooms.size, queue: matchmakingQueue.length });
-      udpServer.send(response, rinfo.port, rinfo.address);
+    const msg = JSON.parse(raw);
+    if (msg.type === 'lan_discover') {
+      const resp = JSON.stringify({
+        type: 'lan_server_info',
+        port: PORT,
+        name: 'Hero Fighter Server',
+        rooms: rooms.size,
+        queue: matchmakingQueue.length,
+      });
+      udpServer.send(resp, 0, resp.length, rinfo.port, rinfo.address, (err) => {
+        if (err) console.error('UDP send error:', err.message);
+      });
     }
-  } catch {}
+  } catch {
+    // Ignore malformed UDP packets
+  }
 });
-udpServer.on('error', (err) => console.error('UDP error:', err.message));
-udpServer.bind(UDP_PORT, () => {
-  udpServer.setBroadcast(true);
-  console.log(`UDP discovery listening on port ${UDP_PORT}`);
-});
+udpServer.bind(UDP_PORT);
 
-// --- Graceful Shutdown ---
+// ======================== Graceful Shutdown ========================
 function shutdown() {
   console.log('Shutting down...');
   clearInterval(heartbeat);
-  clearInterval(cleanup);
   for (const [ws] of clients) {
-    send(ws, 'server_shutdown', {});
-    ws.close();
+    send(ws, 'server_shutdown', { message: 'Server is shutting down' });
+    try { ws.close(); } catch (e) {}
   }
-  udpServer.close();
-  wss.close(() => server.close(() => { console.log('Server stopped.'); process.exit(0); }));
+  try { udpServer.close(); } catch (e) {}
+  wss.close(() => server.close(() => process.exit(0)));
   setTimeout(() => process.exit(1), 5000);
 }
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
-// --- Start ---
-const HOST = process.env.HOST || '0.0.0.0';
-server.listen(PORT, HOST, () => console.log(`Hero Fighter server on port ${PORT}`));
+server.listen(PORT, () => {
+  console.log(`Hero Fighter Server running on port ${PORT}`);
+});

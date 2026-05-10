@@ -460,6 +460,8 @@ class SynthAudio {
         return 1.05;
       case 'mohist':
         return 1.0; // mechanical, neutral
+      case 'jingke':
+        return 1.2; // fast, sharp assassin
       default:
         return 1.0;
     }

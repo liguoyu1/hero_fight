@@ -97,7 +97,7 @@ class LubuHero extends HeroData {
         y: posY,
         vx: cos(angle) * 200,
         vy: sin(angle) * 200,
-        damage: 250,
+        damage: skillDamage,
         lifetime: 0.5,
         color: const Color(0xFFFF4444),
         width: 30,

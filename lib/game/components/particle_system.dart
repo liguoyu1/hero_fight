@@ -2,6 +2,7 @@ import 'dart:math';
 import 'dart:ui';
 
 import 'package:flame/components.dart';
+import 'package:flutter/foundation.dart';
 
 import '../utils/game_random.dart';
 
@@ -60,12 +61,18 @@ class _Particle {
 ///
 /// Pre-allocates particles and reuses them to avoid GC pressure during combat.
 class ParticleSystem extends PositionComponent {
-  final List<_Particle> _pool = [];
+  /// Pool of particles, pre-allocated for performance
+  final List<_Particle> _pool = List.generate(_initialPoolSize, (_) => _Particle());
+  /// Free-list of inactive particle indices for O(1) acquire
+  final List<int> _freeList =
+      List.generate(_initialPoolSize, (i) => _initialPoolSize - 1 - i);
+  static const int _initialPoolSize = 64;
+  static const int _maxPoolSize = 128;
   int _activeCount = 0;
+
   final GameRandom _rng;
 
-  /// Initial pool size — covers a typical combat burst
-  static const int _initialPoolSize = 64;
+  ParticleSystem({required GameRandom rng}) : _rng = rng;
 
   /// Number of currently active particles
   int get activeCount => _activeCount;
@@ -73,15 +80,9 @@ class ParticleSystem extends PositionComponent {
   /// Total pool size (active + inactive)
   int get poolSize => _pool.length;
 
-  ParticleSystem({GameRandom? rng}) : _rng = rng ?? GameRandom() {
-    priority = 90; // Above fighters, below HUD
-    // Pre-allocate pool
-    for (int i = 0; i < _initialPoolSize; i++) {
-      _pool.add(_Particle());
-    }
-  }
+  // Cached Paint for particle rendering — reused across frames
+  final Paint _particlePaint = Paint();
 
-  /// Acquire a particle from the pool. Grows pool if all are active.
   _Particle _acquire({
     required double x,
     required double y,
@@ -93,26 +94,32 @@ class ParticleSystem extends PositionComponent {
     double gravity = 0,
     double friction = 1,
   }) {
-    // Find first inactive particle
-    for (final p in _pool) {
-      if (!p.active) {
-        p.reset(
-          x: x, y: y, vx: vx, vy: vy,
-          life: life, color: color,
-          size: size, gravity: gravity, friction: friction,
-        );
-        _activeCount++;
-        return p;
+    _Particle p;
+    if (_freeList.isNotEmpty) {
+      // O(1) — pop from free-list
+      final idx = _freeList.removeLast();
+      p = _pool[idx];
+    } else if (_pool.length < _maxPoolSize) {
+      // Grow pool up to max
+      p = _Particle();
+      _pool.add(p);
+      debugPrint('ParticleSystem: pool grew to ${_pool.length}');
+    } else {
+      // Pool exhausted — steal oldest active particle or fail gracefully
+      p = _pool.firstWhere((c) => c.active, orElse: () => _pool.first);
+      if (p == _pool.first && !_pool.first.active && _activeCount > 0) {
+        // Edge case: need to find any active particle
+        for (final candidate in _pool) {
+          if (candidate.active) { p = candidate; break; }
+        }
       }
+      debugPrint('ParticleSystem: pool exhausted (max $_maxPoolSize), reusing particle');
     }
-    // Pool exhausted — grow by one
-    final p = _Particle();
     p.reset(
       x: x, y: y, vx: vx, vy: vy,
       life: life, color: color,
       size: size, gravity: gravity, friction: friction,
     );
-    _pool.add(p);
     _activeCount++;
     return p;
   }
@@ -241,11 +248,14 @@ class ParticleSystem extends PositionComponent {
   @override
   void update(double dt) {
     super.update(dt);
-    _activeCount = 0;
-    for (final p in _pool) {
+    for (int i = 0; i < _pool.length; i++) {
+      final p = _pool[i];
       if (p.active) {
         p.update(dt);
-        if (p.active) _activeCount++;
+        if (!p.active) {
+          _activeCount--;
+          _freeList.add(i); // Return index to free-list
+        }
       }
     }
   }
@@ -255,10 +265,15 @@ class ParticleSystem extends PositionComponent {
     super.render(canvas);
     for (final p in _pool) {
       if (!p.active) continue;
-      final paint = Paint()
-        ..color = p.color.withValues(alpha: p.alpha * p.color.a);
+      // Render culling: skip particles outside stage bounds (1280×600)
+      final margin = p.size * 2;
+      if (p.x < -margin || p.x > 1280 + margin ||
+          p.y < -margin || p.y > 600 + margin) {
+        continue;
+      }
+      _particlePaint.color = p.color.withValues(alpha: p.alpha * p.color.a);
       final currentSize = p.size * (0.5 + p.alpha * 0.5);
-      canvas.drawCircle(Offset(p.x, p.y), currentSize, paint);
+      canvas.drawCircle(Offset(p.x, p.y), currentSize, _particlePaint);
     }
   }
 

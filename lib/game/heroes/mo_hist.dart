@@ -23,13 +23,14 @@ class MohistHero extends HeroData {
           defense: 24, // Balanced: was 25
           skillCooldown: 8.0,
           skillDamage: 260, // Balanced: was 280
-          // 墨家机关师：科技型，标准体型，全身机关甲
+          // 墨家机关师：科技型，标准体型，全身机关甲，持机关武器
           visuals: HeroVisuals(
             bodyType: BodyType.normal,
             headRadius: 10, torsoWidth: 24, torsoHeight: 22,
             armLength: 20, armWidth: 6, legLength: 22, legWidth: 6,
             secondaryColor: 0xFFCCAA00, skinColor: 0xFFCC2222,
             hasHelmet: true,
+            hasWeapon: true, weaponLength: 24, weaponColor: 0xFFFFAA00,
           ),
           // 科技型：快速单击，范围中等
           normalAttack: NormalAttackProfile(
@@ -93,7 +94,7 @@ class MohistHero extends HeroData {
         y: posY,
         vx: dir * 550,
         vy: 0,
-        damage: 280,
+        damage: skillDamage,
         lifetime: 1.5,
         color: const Color(0xFFFFFF44),
         width: 80,

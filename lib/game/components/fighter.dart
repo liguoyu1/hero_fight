@@ -3,10 +3,12 @@ import 'dart:ui';
 
 import 'package:flame/components.dart';
 
+import 'package:flutter/services.dart' show HapticFeedback;
+
 import '../heroes/hero_data.dart';
 import '../audio/sound_manager.dart';
 import 'projectile.dart';
-import 'hero_renderer.dart';
+import '../renderers/fighter_renderer.dart';
 
 /// Fighter states
 enum FighterState { idle, walk, jump, attack, skill, hurt, dead }
@@ -103,7 +105,7 @@ class Fighter extends PositionComponent {
   // Animation tracking
   double _animTimer = 0;        // continuous timer for cyclic animations
   double _deathTimer = 0;       // progressive death animation (0→1)
-  static const double deathAnimDuration = 0.6;
+  static const double deathAnimDuration = 1.2; // 延长死亡动画时间，让倒下过程更明显
 
   // Physics
   Vector2 velocity = Vector2.zero();
@@ -118,15 +120,39 @@ class Fighter extends PositionComponent {
   double stunTimer = 0;
   double freezeTimer = 0;
   bool _attackHit = false;
+  bool _prevJump = false; // Edge-triggered jump detection
+
+  // Jump physics
+  double _jumpVelocity = 0;
+  bool _isGrounded = true;
+  static const double _gravity = 800; // pixels/s²
+
+  // Cached Paint for death fade overlay (replaces GPU-heavy saveLayer)
+  final Paint _deathFadePaint = Paint()..blendMode = BlendMode.srcOver;
 
   // Combo tracking
   int _comboHitIndex = 0;
   double _comboResetTimer = 0;
   static const double _comboResetDelay = 0.8;
 
+  // Input buffer for combo chaining (3-5 frames at 30fps)
+  bool _attackBuffered = false;
+  double _attackBufferTimer = 0;
+  static const double _attackBufferWindow = 0.1; // ~3 frames
+
   // Public combo accessors for HUD
   int get comboHitIndex => _comboHitIndex;
   bool get isInCombo => _comboResetTimer > 0;
+
+  // Animation accessors for FighterRenderer
+  double get animTimer => _animTimer;
+  double get deathTimer => _deathTimer;
+  Paint get deathFadePaint => _deathFadePaint;
+  double get currentAttackRange => _currentAttackRange;
+  double get currentAttackDuration => _currentAttackDuration;
+  double get currentAttackDamage => _currentAttackDamage;
+  double get currentHitboxHeight => _currentHitboxHeight;
+  bool get isGrounded => _isGrounded;
 
   // Skill visual presentation
   SkillVisualType skillVisualType = SkillVisualType.ranged;
@@ -159,7 +185,6 @@ class Fighter extends PositionComponent {
 
   // Constants
   static const double gravity = 600;
-  static const double groundY = 520;
   static const double fighterWidth = 50;
   static const double fighterHeight = 70;
   static const double friction = 800;
@@ -169,11 +194,11 @@ class Fighter extends PositionComponent {
   static const double skillDuration = 0.4;
   static const double invincibilityDuration = 0.5;
 
-  // Screen wrapping boundaries (match stage size)
-  static const double wrapMinX = 0;
-  static const double wrapMaxX = 1280;
-  static const double wrapMinY = -50;
-  static const double wrapMaxY = 600;
+  // Screen boundaries - dynamic values will be set in checkStageBoundaries()
+  double wrapMinX = 20;      // Left wall position (will be updated from FighterGame)
+  double wrapMaxX = 1260;    // Right wall position (will be updated from FighterGame)
+  double wrapMinY = 0;       // Top edge of visible area
+  double wrapMaxY = 520;     // Ground level (will be updated from FighterGame)
 
   Fighter({
     required this.playerIndex,
@@ -194,7 +219,7 @@ class Fighter extends PositionComponent {
     Vector2? initialPosition,
   }) : hp = maxHp {
     size = Vector2(fighterWidth, fighterHeight);
-    position = initialPosition ?? Vector2(200, groundY - fighterHeight);
+    position = initialPosition ?? Vector2(200, 520 - fighterHeight);
     facingRight = playerIndex == 0;
   }
 
@@ -219,7 +244,33 @@ class Fighter extends PositionComponent {
     _animTimer += dt;
 
     if (state == FighterState.dead) {
-      // Progress death animation
+      // 死亡时不立即清零速度，让角色有自然的倒下效果
+      // 先更新速度：重力 + 阻尼（模拟死亡后的惯性）
+      velocity.y += gravity * dt;
+      velocity.x *= 0.95;
+      
+      // 再应用速度到位置
+      position.x += velocity.x * dt;
+      position.y += velocity.y * dt;
+      
+      // 地面碰撞检测 - 确保角色不会穿透地面
+      if (position.y > wrapMaxY - fighterHeight) {
+        position.y = wrapMaxY - fighterHeight;
+        velocity.y = 0;
+      }
+      
+      // 当速度很小时清零，避免微小抖动
+      if (velocity.x.abs() < 5) velocity.x = 0;
+      
+      input.left = false;
+      input.right = false;
+      input.up = false;
+      input.down = false;
+      input.jump = false;
+      input.attack = false;
+      input.skill = false;
+      position.x = position.x.clamp(wrapMinX.toDouble(), (wrapMaxX - fighterWidth).toDouble());
+      position.y = position.y.clamp(wrapMinY.toDouble(), (wrapMaxY - fighterHeight).toDouble());
       if (_deathTimer < 1.0) {
         _deathTimer = (_deathTimer + dt / deathAnimDuration).clamp(0.0, 1.0);
       }
@@ -240,6 +291,12 @@ class Fighter extends PositionComponent {
       if (_comboResetTimer <= 0) _comboHitIndex = 0;
     }
 
+    // Input buffer decay
+    if (_attackBufferTimer > 0) {
+      _attackBufferTimer -= dt;
+      if (_attackBufferTimer <= 0) _attackBuffered = false;
+    }
+
     // State timer expiry
     if (stateTimer <= 0) {
       if (state == FighterState.attack ||
@@ -252,22 +309,39 @@ class Fighter extends PositionComponent {
     // Frozen = skip movement/input
     if (isFrozen) return;
 
+    // Apply gravity to jump velocity
+    if (!_isGrounded) {
+      _jumpVelocity += _gravity * dt;
+    }
+
+    // Apply velocity (input movement + jump physics)
+    position.x += velocity.x * dt;
+    position.y += (velocity.y + _jumpVelocity) * dt;
+
+    // Ground detection
+    final groundLevel = wrapMaxY - fighterHeight;
+    if (position.y >= groundLevel) {
+      position.y = groundLevel;
+      _jumpVelocity = 0;
+      _isGrounded = true;
+    }
+
+    // Constrain to stage boundaries (no walking off screen)
+    checkStageBoundaries();
+
+    // Hard clamp as safety measure
+    position.x = position.x.clamp(wrapMinX.toDouble(), (wrapMaxX - fighterWidth).toDouble());
+    position.y = position.y.clamp(wrapMinY.toDouble(), (wrapMaxY - fighterHeight).toDouble());
+
     // Process input (8-direction movement)
     if (canAct) _processInput();
 
-    // Auto-face opponent
-    if (opponent != null &&
-        state != FighterState.attack &&
-        state != FighterState.skill) {
-      facingRight = opponent!.position.x > position.x;
+    // Update facing based on movement direction (not auto-face opponent)
+    // This allows players to control which direction they face
+    if (state != FighterState.attack && state != FighterState.skill) {
+      if (input.left) facingRight = false;
+      if (input.right) facingRight = true;
     }
-
-    // Apply velocity directly
-    position.x += velocity.x * dt;
-    position.y += velocity.y * dt;
-
-    // Screen wrapping (infinite canvas)
-    _checkScreenWrap();
 
     // Attack hitbox check
     if (state == FighterState.attack && !_attackHit &&
@@ -276,17 +350,29 @@ class Fighter extends PositionComponent {
     }
   }
 
-  /// Wraps the fighter around screen edges.
-  void _checkScreenWrap() {
-    if (position.x + fighterWidth < wrapMinX) {
-      position.x = wrapMaxX;
-    } else if (position.x > wrapMaxX) {
-      position.x = wrapMinX - fighterWidth;
+  /// Constrain fighter to stage boundaries (no screen wrapping).
+  void checkStageBoundaries() {
+    // Horizontal: clamp to [wrapMinX, wrapMaxX - fighterWidth]
+    // Keep hero fully within visible screen area
+    final minX = wrapMinX;
+    final maxX = wrapMaxX - fighterWidth;
+    if (position.x < minX) {
+      position.x = minX;
+      if (velocity.x < 0) velocity.x = 0;
+    } else if (position.x > maxX) {
+      position.x = maxX;
+      if (velocity.x > 0) velocity.x = 0;
     }
-    if (position.y + fighterHeight < wrapMinY) {
-      position.y = wrapMaxY;
-    } else if (position.y > wrapMaxY) {
-      position.y = wrapMinY - fighterHeight;
+    // Vertical: clamp to [wrapMinY, wrapMaxY - fighterHeight]
+    // Keep hero fully within visible screen area
+    final minY = wrapMinY;
+    final maxY = wrapMaxY - fighterHeight;
+    if (position.y < minY) {
+      position.y = minY;
+      if (velocity.y < 0) velocity.y = 0;
+    } else if (position.y > maxY) {
+      position.y = maxY;
+      if (velocity.y > 0) velocity.y = 0;
     }
   }
 
@@ -303,7 +389,8 @@ class Fighter extends PositionComponent {
   }
 
   void _processInput() {
-    if (state == FighterState.attack || state == FighterState.skill) return;
+    // Dead or cannot act - ignore all input
+    if (!canAct) return;
 
     // 8-direction movement
     double moveX = 0, moveY = 0;
@@ -312,11 +399,13 @@ class Fighter extends PositionComponent {
     if (input.up) moveY -= 1;
     if (input.down) moveY += 1;
 
-    // Jump (vertical burst)
-    if (input.jump) {
-      moveY -= 1.5;
+    // Jump — impulse applied once per press, only when grounded
+    if (input.jump && !_prevJump && _isGrounded) {
+      _jumpVelocity = -jumpForce;
+      _isGrounded = false;
       SoundManager().playJump();
     }
+    _prevJump = input.jump;
 
     if (moveX != 0 || moveY != 0) {
       final dir = Vector2(moveX, moveY).normalized();
@@ -331,10 +420,17 @@ class Fighter extends PositionComponent {
       }
     }
 
-    // Attack — check for directional attack first
-    if (input.attack && canAttack) {
+    // Attack — check for directional attack first, with input buffer
+    final wantAttack = input.attack || _attackBuffered;
+    if (wantAttack && canAttack) {
+      _attackBuffered = false;
+      _attackBufferTimer = 0;
       final dir = _getAttackDirection();
       _startAttack(dir);
+    } else if (input.attack && !canAttack) {
+      // Buffer the attack for combo chaining
+      _attackBuffered = true;
+      _attackBufferTimer = _attackBufferWindow;
     }
 
     // Skill
@@ -343,6 +439,7 @@ class Fighter extends PositionComponent {
       stateTimer = skillDuration;
       skillCooldownTimer = skillCooldown;
       _executeSkill();
+      HapticFeedback.heavyImpact();
     }
   }
 
@@ -388,6 +485,7 @@ class Fighter extends PositionComponent {
       // Advance combo index
       _comboHitIndex = (_comboHitIndex + 1) % profile.maxComboHits;
       _comboResetTimer = _comboResetDelay;
+      HapticFeedback.mediumImpact();
     } else {
       // Default attack
       _currentAttackDamage = attackPower;
@@ -455,18 +553,32 @@ class Fighter extends PositionComponent {
 
   void takeDamage(double amount, Vector2 knockback) {
     if (!isAlive || isInvincible) return;
-    final effectiveDamage = max(1.0, amount - defense);
+    // Percentage-based defense: higher defense = damage reduced by a percentage
+    // Shield General (38 def) reduces damage to ~57%, Diaochan (18 def) to ~74%
+    // Formula: finalDamage = damage * (100 / (100 + defense * 2))
+    final reduction = 100.0 / (100.0 + defense * 2.0);
+    final effectiveDamage = max(1.0, amount * reduction);
     hp = max(0, hp - effectiveDamage);
     velocity = knockback.clone();
     state = FighterState.hurt;
+    HapticFeedback.lightImpact();
     stateTimer = hurtDuration;
     invincibilityTimer = invincibilityDuration;
     hitFlashTimer = hitFlashDuration;
-    if (hp <= 0) {
+    if (hp <= 0 && state != FighterState.dead) {
       state = FighterState.dead;
-      velocity = Vector2(knockback.x * 0.5, -200);
+      // 不立即清零速度，让角色有自然的倒下效果
       _deathTimer = 0;
+      input.left = false;
+      input.right = false;
+      input.up = false;
+      input.down = false;
+      input.jump = false;
+      input.attack = false;
+      input.skill = false;
     }
+    position.x = position.x.clamp(wrapMinX.toDouble(), (wrapMaxX - fighterWidth).toDouble());
+    position.y = position.y.clamp(wrapMinY.toDouble(), (wrapMaxY - fighterHeight).toDouble());
   }
 
   void applyStun(double duration) {
@@ -501,280 +613,10 @@ class Fighter extends PositionComponent {
   @override
   void render(Canvas canvas) {
     super.render(canvas);
-    final flickerVisible = invincibilityTimer <= 0 ||
-        (invincibilityTimer * 10).floor() % 2 == 0;
-    if (!flickerVisible) return;
-
-    // Shadow
-    final shadowPaint = Paint()..color = const Color(0x33000000);
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: Offset(fighterWidth / 2, fighterHeight + 5),
-        width: fighterWidth * 0.8,
-        height: 10,
-      ),
-      shadowPaint,
-    );
-
-    // Death fade-out: apply opacity layer during death animation
-    if (state == FighterState.dead && _deathTimer > 0.5) {
-      final fadeAlpha = (1.0 - (_deathTimer - 0.5) * 2.0).clamp(0.0, 1.0);
-      canvas.saveLayer(
-        Rect.fromLTWH(
-            -20, -20, fighterWidth + 40, fighterHeight + 40),
-        Paint()..color = Color.fromARGB((fadeAlpha * 255).round(), 255, 255, 255),
-      );
-    }
-
-    // Articulated hero body via HeroRenderer
-    final atkProgress = (state == FighterState.attack && _currentAttackDuration > 0)
-        ? (stateTimer / _currentAttackDuration).clamp(0.0, 1.0)
-        : 0.0;
-    // Get hurt timer for recoil animation
-    final hurtTimer = (state == FighterState.hurt) ? (stateTimer / hurtDuration).clamp(0.0, 1.0) : 0.0;
-    HeroRenderer.render(
-      canvas: canvas,
-      fighterWidth: fighterWidth,
-      fighterHeight: fighterHeight,
-      primaryColor: color,
-      facingRight: facingRight,
-      state: state.name,
-      stateTimer: stateTimer,
-      visuals: visuals,
-      attackProgress: atkProgress,
-      velocityX: velocity.x,
-      skillVisualType: skillVisualType.name,
-      hurtTimer: hurtTimer,
-      comboIndex: _comboHitIndex,
-      animTimer: _animTimer,
-      deathProgress: _deathTimer,
-    );
-
-    // Close death fade-out layer
-    if (state == FighterState.dead && _deathTimer > 0.5) {
-      canvas.restore();
-    }
-
-    // Attack hitbox indicator (subtle)
-    if (state == FighterState.attack) {
-      final atkPaint = Paint()
-        ..color = const Color(0x44FFFF00)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5;
-      final atkX = facingRight ? fighterWidth : -_currentAttackRange;
-      canvas.drawRect(
-          Rect.fromLTWH(atkX, 0, _currentAttackRange, _currentHitboxHeight),
-          atkPaint);
-    }
-
-    // Skill telegraph — hero-specific visual during skill cast
-    if (state == FighterState.skill) {
-      final progress = (stateTimer / skillDuration).clamp(0.0, 1.0);
-      final alpha = (progress * 180).round().clamp(30, 180);
-      final cx = fighterWidth / 2;
-      final cy = fighterHeight / 2;
-      // Extract RGB values once for all skill visuals
-      final r = (color.r * 255).round().clamp(0, 255);
-      final g = (color.g * 255).round().clamp(0, 255);
-      final b = (color.b * 255).round().clamp(0, 255);
-
-      switch (skillVisualType) {
-        case SkillVisualType.spin:
-          // Expanding ring around fighter
-          final radius = skillVisualRadius * (1.0 - progress * 0.3);
-          final ringPaint = Paint()
-            ..color = Color.fromARGB(alpha, r, g, b)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 3;
-          canvas.drawCircle(Offset(cx, cy), radius, ringPaint);
-          // Inner glow
-          final glowPaint = Paint()
-            ..color = Color.fromARGB(alpha ~/ 3, r, g, b);
-          canvas.drawCircle(Offset(cx, cy), radius * 0.6, glowPaint);
-          // Rotating slash marks
-          for (int i = 0; i < 4; i++) {
-            final angle = (1.0 - progress) * 12.0 + i * 1.5708; // pi/2
-            final sx = cx + cos(angle) * radius * 0.8;
-            final sy = cy + sin(angle) * radius * 0.8;
-            final ex = cx + cos(angle) * radius;
-            final ey = cy + sin(angle) * radius;
-            canvas.drawLine(Offset(sx, sy), Offset(ex, ey), ringPaint);
-          }
-
-        case SkillVisualType.dash:
-          // Directional dash trail + range line
-          final dir = facingRight ? 1.0 : -1.0;
-          final dashLen = skillVisualDistance * (1.0 - progress * 0.5);
-          final startX = facingRight ? fighterWidth : 0.0;
-          // Trail rectangle
-          final trailPaint = Paint()
-            ..color = Color.fromARGB(alpha ~/ 2, r, g, b);
-          canvas.drawRect(
-            Rect.fromLTWH(
-              facingRight ? startX : startX - dashLen,
-              fighterHeight * 0.2,
-              dashLen,
-              fighterHeight * 0.6,
-            ),
-            trailPaint,
-          );
-          // Leading edge line
-          final edgePaint = Paint()
-            ..color = Color.fromARGB(alpha, 255, 255, 255)
-            ..strokeWidth = 2;
-          final edgeX = startX + dir * dashLen;
-          canvas.drawLine(
-            Offset(edgeX, fighterHeight * 0.1),
-            Offset(edgeX, fighterHeight * 0.9),
-            edgePaint,
-          );
-
-        case SkillVisualType.fan:
-          // Fan/cone indicator showing spread direction
-          final fanRadius = 80.0 + skillVisualProjectileCount * 8.0;
-          final halfAngle = 0.15 + skillVisualProjectileCount * 0.08; // radians
-          final baseAngle = facingRight ? 0.0 : 3.1416; // 0 or pi
-          final r = color.red;
-          final g = color.green;
-          final b = color.blue;
-          // Fan arc
-          final fanPaint = Paint()
-            ..color = Color.fromARGB(alpha ~/ 2, r, g, b);
-          final arcRect = Rect.fromCircle(
-            center: Offset(facingRight ? fighterWidth : 0, cy),
-            radius: fanRadius * (1.0 - progress * 0.3),
-          );
-          canvas.drawArc(arcRect, baseAngle - halfAngle, halfAngle * 2, true, fanPaint);
-          // Fan border
-          final borderPaint = Paint()
-            ..color = Color.fromARGB(alpha, r, g, b)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 1.5;
-          canvas.drawArc(arcRect, baseAngle - halfAngle, halfAngle * 2, true, borderPaint);
-
-        case SkillVisualType.charge:
-          // Charge-up glow that intensifies
-          final chargeProgress = 1.0 - progress; // 0→1 as charge completes
-          final glowRadius = 20.0 + chargeProgress * 30.0;
-          final glowAlpha = (chargeProgress * 150).round().clamp(0, 150);
-          // Outer glow
-          final outerPaint = Paint()
-            ..color = Color.fromARGB(glowAlpha ~/ 2, r, g, b);
-          canvas.drawCircle(Offset(cx, cy), glowRadius, outerPaint);
-          // Inner bright core
-          final corePaint = Paint()
-            ..color = Color.fromARGB(glowAlpha, 255, 255, 200);
-          canvas.drawCircle(Offset(cx, cy), glowRadius * 0.4, corePaint);
-          // Charge ring
-          final ringPaint = Paint()
-            ..color = Color.fromARGB(glowAlpha, r, g, b)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 2;
-          const startAngle = -1.5708; // -pi/2
-          final sweepAngle = chargeProgress * 6.2832; // 2*pi
-          canvas.drawArc(
-            Rect.fromCircle(center: Offset(cx, cy), radius: glowRadius),
-            startAngle, sweepAngle, false, ringPaint,
-          );
-
-        case SkillVisualType.ranged:
-          // Simple directional indicator
-          final dir = facingRight ? 1.0 : -1.0;
-          final startX = facingRight ? fighterWidth : 0.0;
-          final linePaint = Paint()
-            ..color = Color.fromARGB(alpha, r, g, b)
-            ..strokeWidth = 2
-            ..strokeCap = StrokeCap.round;
-          // Arrow line
-          canvas.drawLine(
-            Offset(startX, cy),
-            Offset(startX + dir * 60, cy),
-            linePaint,
-          );
-          // Arrowhead
-          canvas.drawLine(
-            Offset(startX + dir * 60, cy),
-            Offset(startX + dir * 48, cy - 8),
-            linePaint,
-          );
-          canvas.drawLine(
-            Offset(startX + dir * 60, cy),
-            Offset(startX + dir * 48, cy + 8),
-            linePaint,
-          );
-      }
-    }
-
-    // Frozen overlay
-    if (isFrozen) {
-      final freezePaint = Paint()..color = const Color(0x4400CCFF);
-      final iceBorder = Paint()
-        ..color = const Color(0x8800CCFF)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2;
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(-2, -2, fighterWidth + 4, fighterHeight + 4),
-          const Radius.circular(5),
-        ),
-        freezePaint,
-      );
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(-2, -2, fighterWidth + 4, fighterHeight + 4),
-          const Radius.circular(5),
-        ),
-        iceBorder,
-      );
-    }
-
-    // Stun stars
-    if (isStunned) {
-      final starPaint = Paint()..color = const Color(0xFFFFFF00);
-      for (int i = 0; i < 3; i++) {
-        final angle = (stunTimer * 5 + i * 2.1);
-        final sx = fighterWidth / 2 + cos(angle) * 20;
-        final sy = -10 + sin(angle) * 5;
-        canvas.drawCircle(Offset(sx, sy), 3, starPaint);
-      }
-    }
-
-    // Name label
-    final nameParagraph = _buildText(name, 10, const Color(0xFFFFFFFF));
-    canvas.drawParagraph(
-      nameParagraph,
-      Offset((fighterWidth - nameParagraph.width) / 2, -16),
-    );
-
-    // Hit flash overlay
-    if (hitFlashTimer > 0) {
-      final flashAlpha = (hitFlashTimer / hitFlashDuration).clamp(0.0, 1.0);
-      final flashPaint = Paint()
-        ..color = Color.fromARGB((flashAlpha * 80).round(), 255, 255, 255);
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(0, 0, fighterWidth, fighterHeight),
-          const Radius.circular(5),
-        ),
-        flashPaint,
-      );
-    }
+    FighterRenderer.render(canvas, this);
   }
 
-  Paragraph _buildText(String text, double fontSize, Color color) {
-    final builder = ParagraphBuilder(ParagraphStyle(
-      textAlign: TextAlign.center,
-      fontSize: fontSize,
-    ))
-      ..pushStyle(TextStyle(color: color, fontSize: fontSize))
-      ..addText(text);
-    final paragraph = builder.build();
-    paragraph.layout(const ParagraphConstraints(width: 100));
-    return paragraph;
-  }
-
-  /// Serializable snapshot for rollback netcode.
-  /// Includes all mutable state needed to reconstruct a frame.
+  // --- Serialization support for rollback netcode ---
   Map<String, dynamic> toJson() => {
         'px': position.x,
         'py': position.y,

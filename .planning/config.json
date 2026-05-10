@@ -1,0 +1,8 @@
+{
+  "workflow": {
+    "auto_advance": false,
+    "parallelization": true,
+    "commit_docs": true,
+    "context_window": 200000
+  }
+}

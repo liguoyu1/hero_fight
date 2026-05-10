@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'ws_channel.dart';
@@ -45,6 +45,7 @@ class GameClient {
   final _onLanServerFound = StreamController<Map<String, dynamic>>.broadcast();
   final _onMatchmakingStatus = StreamController<Map<String, dynamic>>.broadcast();
   final _onMatchFound = StreamController<Map<String, dynamic>>.broadcast();
+  final _onResyncState = StreamController<Map<String, dynamic>>.broadcast();
   final _onMessage = StreamController<Map<String, dynamic>>.broadcast();
 
   // Public getters
@@ -74,7 +75,13 @@ class GameClient {
       _onMatchmakingStatus.stream;
   Stream<Map<String, dynamic>> get onMatchFound =>
       _onMatchFound.stream;
+  Stream<Map<String, dynamic>> get onResyncState =>
+      _onResyncState.stream;
   Stream<Map<String, dynamic>> get onMessage => _onMessage.stream;
+
+  /// Unified event stream: all events via a single subscription.
+  /// Each event has a 'type' field for filtering.
+  Stream<Map<String, dynamic>> get onAnyEvent => _onMessage.stream;
 
   /// Connect to the game server via WebSocket.
   Future<void> connect(String url, {bool autoReconnect = true}) async {
@@ -86,11 +93,11 @@ class GameClient {
     if (_deviceId == null) {
       try {
         _deviceId = await getDeviceId();
-        print('Device ID obtained: $_deviceId');
+        debugPrint('Device ID obtained: $_deviceId');
       } catch (e) {
         // 如果获取失败，生成随机 ID
         _deviceId = 'random_${DateTime.now().millisecondsSinceEpoch}_${_random.nextInt(999999)}';
-        print('Failed to get device ID, using random: $_deviceId');
+        debugPrint('Failed to get device ID, using random: $_deviceId');
       }
     }
     
@@ -102,7 +109,7 @@ class GameClient {
       disconnect(permanent: false);
       // 直接使用传入的 URL（已经是 ws:// 或 wss://）
       final wsUrl = _serverUrl!;
-      print('Connecting to: $wsUrl'); // 调试日志
+      debugPrint('Connecting to: $wsUrl'); // 调试日志
       _channel = createChannel(wsUrl);
       _subscription = _channel!.stream.listen(
         _onData,
@@ -110,7 +117,10 @@ class GameClient {
         onDone: _onWsDone,
       );
     } catch (e) {
-      _onError.add('Connection failed: $e');
+      final friendly = e.toString().contains('SocketException')
+          ? 'Cannot reach server. Check your connection and try again.'
+          : 'Connection failed: $e';
+      _onError.add(friendly);
       _scheduleReconnect();
     }
   }
@@ -179,6 +189,19 @@ class GameClient {
         case 'match_found':
           _onMatchFound.add(msg);
           break;
+        case 'resync_state':
+          _onResyncState.add(msg);
+          break;
+        case 'player_reconnected':
+          _onPlayerJoined.add(msg); // Reuse player_joined stream
+          break;
+        case 'pong': {
+          final sent = msg['timestamp'] as int?;
+          if (sent != null) {
+            _rttMs = (DateTime.now().millisecondsSinceEpoch - sent).toDouble();
+          }
+          break;
+        }
         case 'server_shutdown':
           _onDisconnected.add('Server shutting down');
           break;
@@ -265,6 +288,15 @@ class GameClient {
   void requestMatchmaking({String? playerName}) =>
       _send({'type': 'start_matchmaking', if (playerName != null) 'playerName': playerName});
   void cancelMatchmaking() => _send({'type': 'cancel_matchmaking'});
+
+  // --- Network diagnostics ---
+  double _rttMs = 50; // default RTT estimate
+  double get rttMs => _rttMs;
+
+  /// Send application-level ping to measure RTT
+  void sendPing() {
+    _send({'type': 'ping', 'timestamp': DateTime.now().millisecondsSinceEpoch});
+  }
 
   // --- LAN Discovery ---
   /// Discovers LAN servers via UDP broadcast.

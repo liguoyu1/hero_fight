@@ -21,7 +21,8 @@ class RollbackEngine {
 
   /// Number of frames to delay before applying remote input.
   /// Higher = fewer visible rollbacks, but more input lag.
-  final int delayFrames;
+  /// Updated dynamically based on measured RTT.
+  int delayFrames;
 
   /// Save a snapshot every N frames for rollback recovery.
   final int snapshotInterval;
@@ -83,6 +84,12 @@ class RollbackEngine {
 
   /// Remote frame delay (how many frames behind remote is).
   int get remoteDelay => _frame - _remoteFrame;
+
+  /// Update delayFrames based on measured RTT (ms).
+  /// At 30fps, each frame = ~33ms. Min 2 frames for stability.
+  void updateDelayFromRtt(double rttMs) {
+    delayFrames = (rttMs / 33.3).ceil().clamp(2, 6);
+  }
 
   /// Latest local input as a map, for network sending.
   Map<String, dynamic> lastLocalInput() {

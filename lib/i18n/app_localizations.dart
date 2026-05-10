@@ -168,6 +168,47 @@ class AppLocalizations {
   String get gamesSuffix => translations['games_suffix'] ?? 'games';
   String get winsSuffix => translations['wins_suffix'] ?? 'wins';
   String get lossesSuffix => translations['losses_suffix'] ?? 'losses';
+
+  // New keys for hero_select.dart
+  String get readyWaiting => translations['ready_waiting'] ?? '就绪 (等待中...)';
+  String get picked => translations['picked'] ?? '已选';
+  String get player1 => translations['player1'] ?? 'P1';
+  String get player2 => translations['player2'] ?? 'P2';
+  String get aiLabel => translations['ai_label'] ?? 'AI';
+  String get you => translations['you'] ?? '你';
+  String get pleaseSelectHero => translations['please_select_hero'] ?? '请先选择英雄';
+  String get threeKingdoms => translations['three_kingdoms'] ?? '三国';
+  String get mythologyLabel => translations['mythology_label'] ?? '神话';
+  String get warringStates => translations['warring_states'] ?? '战国';
+  String get notSelected => translations['not_selected'] ?? '未选择';
+  String get player1SelectHero => translations['player1_select_hero'] ?? '玩家1 - 选择英雄';
+  String get player2SelectHero => translations['player2_select_hero'] ?? '玩家2 - 选择英雄';
+  String get chooseHeroThenReady => translations['choose_hero_then_ready'] ?? '选择英雄后点击"就绪"';
+  String get aiAutoSelect => translations['ai_auto_select'] ?? 'AI将自动选择对手';
+  String get selectYourHero => translations['select_your_hero'] ?? '选择你的英雄';
+  String get selectOpponentHero => translations['select_opponent_hero'] ?? '选择对手英雄';
+  String get player1ChooseHero => translations['player1_choose_hero'] ?? '玩家1，选择你的英雄';
+  String get player2ChooseHero => translations['player2_choose_hero'] ?? '玩家2，选择你的英雄';
+
+  // New keys for main_menu.dart
+  String get settings => translations['settings'] ?? '设置';
+  String get soundEffects => translations['sound_effects'] ?? '音效';
+  String get version => translations['version'] ?? 'Hero Fighter v1.0.0';
+  String get ok => translations['ok'] ?? '确定';
+
+  // New keys for stats_screen.dart
+  String get noLeaderboardData => translations['no_leaderboard_data'] ?? '暂无排行榜数据';
+  String get needAtLeastGames => translations['need_at_least_games'] ?? '需要至少5场游戏才能上榜';
+
+  // New keys for tutorial_overlay.dart
+  String get tutorialKeyboard => translations['tutorial_keyboard'] ?? '⌨️ 键盘';
+  String get tutorialTouch => translations['tutorial_touch'] ?? '📱 触屏';
+
+  /// Parameterized getter: "Play {n} more games to unlock"
+  String playMoreGames(int remaining) {
+    final template = translations['play_more_games'] ?? '再玩{n}场解锁';
+    return template.replaceAll('{n}', '$remaining');
+  }
   
   /// Create instance from system locale
   static AppLocalizations fromSystemLocale() {
@@ -323,6 +364,38 @@ class AppLocalizations {
     'games_suffix': '场',
     'wins_suffix': '胜',
     'losses_suffix': '负',
+    // Hero select
+    'ready_waiting': '就绪 (等待中...)',
+    'picked': '已选',
+    'player1': 'P1',
+    'player2': 'P2',
+    'ai_label': 'AI',
+    'you': '你',
+    'please_select_hero': '请先选择英雄',
+    'three_kingdoms': '三国',
+    'mythology_label': '神话',
+    'warring_states': '战国',
+    'not_selected': '未选择',
+    'player1_select_hero': '玩家1 - 选择英雄',
+    'player2_select_hero': '玩家2 - 选择英雄',
+    'choose_hero_then_ready': '选择英雄后点击"就绪"',
+    'ai_auto_select': 'AI将自动选择对手',
+    'select_your_hero': '选择你的英雄',
+    'select_opponent_hero': '选择对手英雄',
+    'player1_choose_hero': '玩家1，选择你的英雄',
+    'player2_choose_hero': '玩家2，选择你的英雄',
+    // Main menu
+    'settings': '设置',
+    'sound_effects': '音效',
+    'version': 'Hero Fighter v1.0.0',
+    'ok': '确定',
+    // Stats
+    'no_leaderboard_data': '暂无排行榜数据',
+    'need_at_least_games': '需要至少5场游戏才能上榜',
+    'play_more_games': '再玩{n}场解锁',
+    // Tutorial
+    'tutorial_keyboard': '⌨️ 键盘',
+    'tutorial_touch': '📱 触屏',
   };
   
   /// English translations
@@ -472,5 +545,37 @@ class AppLocalizations {
     'games_suffix': 'games',
     'wins_suffix': 'wins',
     'losses_suffix': 'losses',
+    // Hero select
+    'ready_waiting': 'Ready (Waiting...)',
+    'picked': 'PICKED',
+    'player1': 'P1',
+    'player2': 'P2',
+    'ai_label': 'AI',
+    'you': 'You',
+    'please_select_hero': 'Please select a hero first',
+    'three_kingdoms': 'Three Kingdoms',
+    'mythology_label': 'Mythology',
+    'warring_states': 'Warring States',
+    'not_selected': 'Not Selected',
+    'player1_select_hero': 'Player 1 - Select Hero',
+    'player2_select_hero': 'Player 2 - Select Hero',
+    'choose_hero_then_ready': 'Choose your hero, then click "Ready"',
+    'ai_auto_select': 'AI will auto-select opponent',
+    'select_your_hero': 'Select Your Hero',
+    'select_opponent_hero': 'Select Opponent Hero',
+    'player1_choose_hero': 'Player 1, choose your hero',
+    'player2_choose_hero': 'Player 2, choose your hero',
+    // Main menu
+    'settings': 'Settings',
+    'sound_effects': 'Sound Effects',
+    'version': 'Hero Fighter v1.0.0',
+    'ok': 'OK',
+    // Stats
+    'no_leaderboard_data': 'No leaderboard data',
+    'need_at_least_games': 'Need at least 5 games to appear',
+    'play_more_games': 'Play {n} more games to unlock',
+    // Tutorial
+    'tutorial_keyboard': '⌨️ Keyboard',
+    'tutorial_touch': '📱 Touch',
   };
 }

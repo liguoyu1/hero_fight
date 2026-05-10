@@ -15,15 +15,15 @@ class ZhugeHero extends HeroData {
           colorValue: 0xFF4488FF,
           skillName: 'Rain of Arrows',
           skillNameEn: 'Rain of Arrows',
-          skillDesc: 'Fire 7 arrows in a fan, each dealing 80 damage',
-          skillDescEn: 'Fire 7 arrows in a fan, each dealing 80 damage',
+          skillDesc: 'Fire 5 arrows in a fan, each dealing 60 damage',
+          skillDescEn: 'Fire 5 arrows in a fan, each dealing 60 damage',
           hp: 880, // Balanced: was 800
           speed: 165, // Balanced: was 160
           jumpForce: 300,
           attackPower: 40, // Balanced: was 35
           defense: 18, // Balanced: was 15
-          skillCooldown: 6.0,
-          skillDamage: 80,
+          skillCooldown: 7.0,
+          skillDamage: 60,
           // 诸葛亮：法师，纤细体型，持羽扇
           visuals: HeroVisuals(
             bodyType: BodyType.slim,
@@ -31,6 +31,7 @@ class ZhugeHero extends HeroData {
             armLength: 18, armWidth: 4, legLength: 23, legWidth: 5,
             secondaryColor: 0xFF2244AA, skinColor: 0xFFFFDBAC,
             hasCape: true,
+            hasWeapon: true, weaponLength: 20, weaponColor: 0xFF88BBFF,
           ),
           // 法师：近战范围小但快，无连击
           normalAttack: NormalAttackProfile(
@@ -77,8 +78,8 @@ class ZhugeHero extends HeroData {
     required bool facingRight,
   }) {
     final List<ProjectileConfig> projectiles = [];
-    const int arrowCount = 7;
-    const double spreadAngle = 0.6;
+    const int arrowCount = 5; // Nerf: was 7
+    const double spreadAngle = 0.5; // Nerf: was 0.6
     final double baseAngle = facingRight ? 0 : pi;
 
     for (int i = 0; i < arrowCount; i++) {
@@ -87,12 +88,12 @@ class ZhugeHero extends HeroData {
       projectiles.add(ProjectileConfig(
         x: posX + (facingRight ? 30 : -30),
         y: posY,
-        vx: cos(angle) * 400,
-        vy: sin(angle) * 400,
-        damage: 80,
-        lifetime: 1.5,
+        vx: cos(angle) * 380,
+        vy: sin(angle) * 380,
+        damage: skillDamage, // Use hero stat instead of hardcoded
+        lifetime: 1.3,
         color: const Color(0xFF88CCFF),
-        width: 20,
+        width: 18,
         height: 6,
         type: ProjectileType.normal,
       ));

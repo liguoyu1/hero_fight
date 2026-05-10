@@ -23,13 +23,14 @@ class ShieldGeneralHero extends HeroData {
           defense: 38, // Increased: was 35
           skillCooldown: 6.0,
           skillDamage: 150,
-          // 盾卫将军：坦克，中等偏壮体型，持盾牌
+          // 盾卫将军：坦克，中等偏壮体型，持盾牌和剑
           visuals: HeroVisuals(
             bodyType: BodyType.heavy,
             headRadius: 10, torsoWidth: 26, torsoHeight: 22,
             armLength: 21, armWidth: 6, legLength: 21, legWidth: 7,
             secondaryColor: 0xFF1144AA, skinColor: 0xFFFFDBAC,
             hasHelmet: true, hasShield: true,
+            hasWeapon: true, weaponLength: 28, weaponColor: 0xFFDDDDDD,
           ),
           // 坦克：稳健2连击，范围中等
           normalAttack: NormalAttackProfile(

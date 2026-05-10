@@ -22,14 +22,15 @@ class DiaochanHero extends HeroData {
           jumpForce: 360,
           attackPower: 38, // Balanced: was 32
           defense: 18, // Balanced: was 10
-          skillCooldown: 5.0,
-          skillDamage: 90,
-          // 貂蝉：刺客，纤细体型，轻盈
+          skillCooldown: 7.0, // Nerf: was 5.0 (too frequent freeze)
+          skillDamage: 80, // Nerf: was 90
+          // 貂蝉：刺客，纤细体型，持双匕首
           visuals: HeroVisuals(
             bodyType: BodyType.slim,
             headRadius: 8, torsoWidth: 18, torsoHeight: 18,
             armLength: 16, armWidth: 4, legLength: 22, legWidth: 5,
             secondaryColor: 0xFFDD44AA, skinColor: 0xFFFFE0D0,
+            hasWeapon: true, weaponLength: 18, weaponColor: 0xFFFF88AA,
           ),
           // 刺客：极速3连击，范围小
           normalAttack: NormalAttackProfile(
@@ -90,7 +91,7 @@ class DiaochanHero extends HeroData {
         y: posY + sin(angle) * 20 - 20,
         vx: cos(angle) * 350,
         vy: sin(angle) * 350,
-        damage: 90,
+        damage: skillDamage, // Use hero stat
         lifetime: 1.0,
         color: const Color(0xFFFF88DD),
         width: 12,

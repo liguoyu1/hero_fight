@@ -16,11 +16,11 @@ class ChiyouHero extends HeroData {
           skillNameEn: 'Juli War Cry',
           skillDesc: 'Devastating punch dealing 350 damage and stunning for 1.5s',
           skillDescEn: 'Devastating punch dealing 350 damage and stunning for 1.5s',
-          hp: 1150, // Balanced: was 1300
+          hp: 1050, // Nerf: was 1150 (too tanky)
           speed: 145, // Balanced: was 130
           jumpForce: 300,
-          attackPower: 52, // Balanced: was 55
-          defense: 32, // Balanced: was 35
+          attackPower: 48, // Nerf: was 52
+          defense: 28, // Nerf: was 32 (too tanky)
           skillCooldown: 12.0,
           skillDamage: 320, // Balanced: was 350
           // 蚩尤：最强坦克，巨型体型，铜头铁额
@@ -87,7 +87,7 @@ class ChiyouHero extends HeroData {
         y: posY - 10,
         vx: dir * 300,
         vy: 0,
-        damage: 350,
+        damage: skillDamage,
         lifetime: 0.8,
         color: const Color(0xFF9944FF),
         width: 50,

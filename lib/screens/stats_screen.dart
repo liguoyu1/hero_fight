@@ -21,6 +21,8 @@ class _StatsScreenState extends State<StatsScreen> {
   PlayerStats? _stats;
   bool _loading = true;
   List<Map<String, dynamic>> _leaderboard = const [];
+  bool _leaderboardLoading = true;
+  String? _leaderboardError;
 
   @override
   void initState() {
@@ -40,6 +42,7 @@ class _StatsScreenState extends State<StatsScreen> {
   }
 
   Future<void> _loadLeaderboard() async {
+    setState(() { _leaderboardLoading = true; _leaderboardError = null; });
     try {
       final base = _buildBaseUrl();
       final resp = await http.get(Uri.parse('$base/api/leaderboard'));
@@ -48,10 +51,24 @@ class _StatsScreenState extends State<StatsScreen> {
         if (mounted) {
           setState(() {
             _leaderboard = data.cast<Map<String, dynamic>>();
+            _leaderboardLoading = false;
           });
         }
+      } else {
+        if (mounted) setState(() { _leaderboardError = 'Server error: ${resp.statusCode}'; _leaderboardLoading = false; });
       }
-    } catch (_) {}
+    } catch (e) {
+      if (mounted) setState(() { _leaderboardError = 'Network error: $e'; _leaderboardLoading = false; });
+    }
+  }
+
+  String _ordinalRank(int rank) {
+    if (rank == 1) return '🥇';
+    if (rank == 2) return '🥈';
+    if (rank == 3) return '🥉';
+    final last = rank % 10;
+    final suffix = (last == 1 && rank != 11) ? 'st' : (last == 2 && rank != 12) ? 'nd' : (last == 3 && rank != 13) ? 'rd' : 'th';
+    return '$rank$suffix';
   }
 
   String _buildBaseUrl() {
@@ -377,7 +394,7 @@ class _StatsScreenState extends State<StatsScreen> {
                 ),
                 SizedBox(height: isCompact ? 2 : 4),
                 Text(
-                  'Play $remaining more games to unlock',
+                  l10n.playMoreGames(remaining),
                   style: TextStyle(color: Colors.white38, fontSize: isCompact ? 11 : 12),
                 ),
               ],
@@ -492,6 +509,18 @@ class _StatsScreenState extends State<StatsScreen> {
     final l10n = AppLocalizations.fromSystemLocale();
     final isCompact = MediaQuery.of(context).size.width < 450;
 
+    if (_leaderboardLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_leaderboardError != null) {
+      return Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text(_leaderboardError!, style: const TextStyle(color: Colors.redAccent)),
+          const SizedBox(height: 8),
+          TextButton(onPressed: _loadLeaderboard, child: const Text('Retry')),
+        ]),
+      );
+    }
     if (_leaderboard.isEmpty) {
       return Center(
         child: Column(
@@ -499,9 +528,9 @@ class _StatsScreenState extends State<StatsScreen> {
           children: [
             Icon(Icons.leaderboard, size: isCompact ? 48 : 64, color: Colors.white24),
             SizedBox(height: isCompact ? 12 : 16),
-            Text('No leaderboard data', style: TextStyle(fontSize: isCompact ? 16 : 18, color: Colors.white54)),
+            Text(l10n.noLeaderboardData, style: TextStyle(fontSize: isCompact ? 16 : 18, color: Colors.white54)),
             SizedBox(height: isCompact ? 4 : 8),
-            Text('Need at least 5 games to appear', style: TextStyle(fontSize: isCompact ? 12 : 14, color: Colors.white38)),
+            Text(l10n.needAtLeastGames, style: TextStyle(fontSize: isCompact ? 12 : 14, color: Colors.white38)),
           ],
         ),
       );
@@ -531,7 +560,7 @@ class _StatsScreenState extends State<StatsScreen> {
           rankIcon = '🥉';
         } else {
           rankColor = Colors.white38;
-          rankIcon = '${index + 1}';
+          rankIcon = _ordinalRank(index + 1);
         }
 
         return Container(

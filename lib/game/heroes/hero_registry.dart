@@ -6,14 +6,27 @@ class HeroRegistry {
   static final HeroRegistry instance = HeroRegistry._();
 
   final Map<String, HeroData> _heroes = {};
+  final Map<String, HeroData Function()> _factories = {};
 
-  /// Register a hero data instance
+  /// Register a hero data instance (for lookup/display)
   void register(HeroData hero) {
     _heroes[hero.id] = hero;
   }
 
-  /// Get a hero by id (returns a reference, stats are const)
+  /// Register a factory function for creating new hero instances
+  void registerFactory(String id, HeroData Function() factory) {
+    _factories[id] = factory;
+  }
+
+  /// Get a hero by id (returns reference to registered instance)
   HeroData? get(String id) => _heroes[id];
+
+  /// Create a new hero instance by id (uses factory, falls back to registered instance)
+  HeroData? create(String id) {
+    final factory = _factories[id];
+    if (factory != null) return factory();
+    return _heroes[id]; // fallback: return existing instance
+  }
 
   /// Get all registered heroes
   List<HeroData> getAll() => _heroes.values.toList();

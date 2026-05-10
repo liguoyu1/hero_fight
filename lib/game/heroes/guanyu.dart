@@ -80,7 +80,7 @@ class GuanyuHero extends HeroData {
         y: posY,
         vx: dir * 350,
         vy: 0,
-        damage: 300,
+        damage: skillDamage,
         lifetime: 0.6,
         color: const Color(0xFF44FF44),
         width: 60,

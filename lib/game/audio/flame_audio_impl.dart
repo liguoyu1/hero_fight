@@ -1,178 +1,98 @@
-import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flame_audio/flame_audio.dart';
 
-/// Flame Audio implementation of SynthAudio for iOS/Android/desktop.
-/// Uses audioplayers to play programmatic placeholder sounds.
-/// Since we don't have actual audio files, this creates simple tone-based sounds.
+/// Flame Audio implementation for iOS/Android/desktop.
+/// Uses flame_audio to play WAV files from assets/sounds/.
 class SynthAudio {
   static final SynthAudio _instance = SynthAudio._internal();
   factory SynthAudio() => _instance;
   SynthAudio._internal();
 
   bool _ready = false;
-  bool _audioInitialized = false;
+
+  // Audio pools for frequently-played sounds
+  AudioPool? _hitPool;
+  AudioPool? _heavyHitPool;
+  AudioPool? _skillPool;
 
   bool get isReady => _ready;
 
-  /// Initialize flame_audio. This is async because AudioPool needs preloading.
   Future<void> init() async {
-    if (_ready || _audioInitialized) return;
+    if (_ready) return;
     try {
-      // Pre-initialize audio - on mobile, we need user gesture to start audio
-      // But we can prepare the system. For placeholder sounds, we'll use
-      // simple AudioPlayer instances.
-      _audioInitialized = true;
+      FlameAudio.audioCache.loadAll([
+        'sounds/attack.wav',
+        'sounds/death.wav',
+        'sounds/skill.wav',
+        'sounds/start.wav',
+        'sounds/win.wav',
+        'sounds/hit.wav',
+        'sounds/jump.wav',
+      ]);
+      _hitPool = await FlameAudio.createPool('sounds/hit.wav', maxPlayers: 4);
+      _heavyHitPool = await FlameAudio.createPool('sounds/attack.wav', maxPlayers: 3);
+      _skillPool = await FlameAudio.createPool('sounds/skill.wav', maxPlayers: 3);
       _ready = true;
-      debugPrint('FlameAudio: initialized successfully');
+      debugPrint('FlameAudio: initialized with WAV files');
     } catch (e) {
       debugPrint('FlameAudio: init failed: $e');
       _ready = false;
     }
   }
 
-  /// Resume audio context (call after user gesture on mobile).
   void resume() {
-    // flame_audio handles this automatically on mobile
+    // flame_audio handles audio session automatically
   }
 
-  // ─── Sound generation helpers using tone-based placeholders ───
-
-  void _playTone({
-    required double frequency,
-    required double duration,
-    required double volume,
-    double pitch = 1.0,
-  }) {
+  void _playSound(String path, {double volume = 0.5}) {
     if (!_ready) return;
-    // For placeholder, we skip actual playback since we don't have audio files
-    // In production, you would use: AudioPool('sounds/hit.wav').play()
-    // For now, we just acknowledge the sound was "played"
-    debugPrint('FlameAudio: play tone $frequency Hz, duration $duration, pitch $pitch');
+    FlameAudio.play(path, volume: volume);
+  }
+
+  void _playPool(AudioPool? pool, {double volume = 0.5}) {
+    if (!_ready || pool == null) return;
+    pool.start(volume: volume);
   }
 
   // ─── Attack sounds ───
-
-  /// Light punch — short, snappy (placeholder: mid tone)
-  void playLightHit({double pitch = 1.0}) {
-    if (!_ready) return;
-    _playTone(frequency: 300 * pitch, duration: 0.08, volume: 0.3, pitch: pitch);
-  }
-
-  /// Heavy hit — deeper, more impact (placeholder: low tone)
-  void playHeavyHit({double pitch = 1.0}) {
-    if (!_ready) return;
-    _playTone(frequency: 150 * pitch, duration: 0.15, volume: 0.4, pitch: pitch);
-  }
-
-  /// Combo finisher — dramatic impact (placeholder: combo sound)
-  void playComboFinisher({double pitch = 1.0}) {
-    if (!_ready) return;
-    _playTone(frequency: 200 * pitch, duration: 0.25, volume: 0.5, pitch: pitch);
-  }
+  void playLightHit({double pitch = 1.0}) => _playPool(_hitPool);
+  void playHeavyHit({double pitch = 1.0}) => _playPool(_heavyHitPool);
+  void playComboFinisher({double pitch = 1.0}) => _playPool(_heavyHitPool);
 
   // ─── Skill sounds ───
-
-  /// Energy skill — whoosh + rising tone
-  void playSkill({double pitch = 1.0}) {
-    if (!_ready) return;
-    _playTone(frequency: 500 * pitch, duration: 0.3, volume: 0.25, pitch: pitch);
-  }
-
-  /// Projectile launch — sharp zap
-  void playProjectile({double pitch = 1.0}) {
-    if (!_ready) return;
-    _playTone(frequency: 800 * pitch, duration: 0.12, volume: 0.2, pitch: pitch);
-  }
+  void playSkill({double pitch = 1.0}) => _playPool(_skillPool);
+  void playProjectile({double pitch = 1.0}) => _playPool(_skillPool);
 
   // ─── Hurt / Death ───
-
-  /// Hurt — short pain sound
-  void playHurt({double pitch = 1.0}) {
-    if (!_ready) return;
-    _playTone(frequency: 400 * pitch, duration: 0.1, volume: 0.2, pitch: pitch);
-  }
-
-  /// Death — dramatic falling tone
-  void playDeath() {
-    if (!_ready) return;
-    _playTone(frequency: 200, duration: 0.5, volume: 0.3);
-  }
+  void playHurt({double pitch = 1.0}) => _playSound('sounds/hit.wav');
+  void playDeath() => _playSound('sounds/death.wav');
 
   // ─── Status effects ───
-
-  /// Freeze — icy crystalline sound
-  void playFreeze() {
-    if (!_ready) return;
-    _playTone(frequency: 2400, duration: 0.3, volume: 0.15);
-  }
-
-  /// Stun — ringing bell
-  void playStun() {
-    if (!_ready) return;
-    _playTone(frequency: 1200, duration: 0.4, volume: 0.15);
-  }
+  void playFreeze() => _playSound('sounds/skill.wav', volume: 0.3);
+  void playStun() => _playSound('sounds/hit.wav', volume: 0.2);
 
   // ─── Movement ───
+  void playJump() => _playSound('sounds/jump.wav', volume: 0.3);
+  void playLand() => _playSound('sounds/jump.wav', volume: 0.15);
 
-  /// Jump — quick upward sweep
-  void playJump() {
-    if (!_ready) return;
-    _playTone(frequency: 400, duration: 0.1, volume: 0.1);
-  }
-
-  /// Land — soft thud
-  void playLand() {
-    if (!_ready) return;
-    _playTone(frequency: 200, duration: 0.05, volume: 0.1);
-  }
-
-  // ─── UI / Round sounds ───
-
-  /// Round start — ascending fanfare
-  void playRoundStart() {
-    if (!_ready) return;
-    _playTone(frequency: 523, duration: 0.4, volume: 0.2);
-  }
-
-  /// Win — triumphant chord
-  void playWin() {
-    if (!_ready) return;
-    _playTone(frequency: 784, duration: 0.8, volume: 0.2);
-  }
-
-  /// Menu select — click
-  void playMenuSelect() {
-    if (!_ready) return;
-    _playTone(frequency: 800, duration: 0.06, volume: 0.12);
-  }
+  // ─── UI / Round ───
+  void playRoundStart() => _playSound('sounds/start.wav');
+  void playWin() => _playSound('sounds/win.wav');
+  void playMenuSelect() => _playSound('sounds/hit.wav', volume: 0.15);
 
   // ─── Hero-specific pitch mapping ───
-
-  /// Returns pitch multiplier for a hero. Mirrors the real implementation.
   static double heroPitch(String heroId) {
     switch (heroId) {
-      case 'lubu':
-      case 'leizhenzi':
-        return 0.8; // heavy, deep
-      case 'guanyu':
-      case 'shield_general':
-        return 0.85;
-      case 'chiyou':
-        return 0.7; // deepest
-      case 'shaolin_monk':
-        return 1.1; // fast, sharp
-      case 'diaochan':
-        return 1.3; // light, high
-      case 'zhuge':
-      case 'guiguzi':
-        return 1.15; // magical
-      case 'houyi':
-        return 1.05;
-      case 'mohist':
-        return 1.0; // mechanical, neutral
-      default:
-        return 1.0;
+      case 'lubu': case 'leizhenzi': return 0.8;
+      case 'guanyu': case 'shield_general': return 0.85;
+      case 'chiyou': return 0.7;
+      case 'shaolin_monk': return 1.1;
+      case 'diaochan': return 1.3;
+      case 'zhuge': case 'guiguzi': return 1.15;
+      case 'houyi': return 1.05;
+      case 'mohist': return 1.0;
+      case 'jingke': return 1.2;
+      default: return 1.0;
     }
   }
 }
