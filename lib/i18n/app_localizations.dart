@@ -212,9 +212,8 @@ class AppLocalizations {
   
   /// Create instance from system locale
   static AppLocalizations fromSystemLocale() {
-    final systemLocale = PlatformDispatcher.instance.locale;
-    final langCode = systemLocale.languageCode == 'en' ? 'en' : 'zh';
-    return AppLocalizations(languageCode: langCode);
+    // Always use English for unified UI
+    return AppLocalizations(languageCode: 'en');
   }
   
   /// Chinese translations (default)

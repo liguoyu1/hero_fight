@@ -63,9 +63,9 @@ class _StatsScreenState extends State<StatsScreen> {
   }
 
   String _ordinalRank(int rank) {
-    if (rank == 1) return '🥇';
-    if (rank == 2) return '🥈';
-    if (rank == 3) return '🥉';
+    if (rank == 1) return '1st';
+    if (rank == 2) return '2nd';
+    if (rank == 3) return '3rd';
     final last = rank % 10;
     final suffix = (last == 1 && rank != 11) ? 'st' : (last == 2 && rank != 12) ? 'nd' : (last == 3 && rank != 13) ? 'rd' : 'th';
     return '$rank$suffix';
@@ -86,7 +86,7 @@ class _StatsScreenState extends State<StatsScreen> {
       length: 2,
       child: Scaffold(
         appBar: AppBar(
-          title: Text(_stats?.displayName != null ? '${_stats!.displayName}\'s Stats' : l10n.stats),
+          title: Text(l10n.stats),
           bottom: TabBar(
             tabs: [
               Tab(text: l10n.myStats),

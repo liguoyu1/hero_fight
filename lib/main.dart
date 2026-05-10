@@ -32,25 +32,26 @@ class HeroFighterApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: Colors.black,
+        scaffoldBackgroundColor: const Color(0xFF0D0D2B),
         colorScheme: ColorScheme.dark(
-          primary: Colors.red.shade700,
+          primary: Colors.red,
           secondary: Colors.redAccent,
-          surface: const Color(0xFF1A1A1A),
+          surface: const Color(0xFF2A1A1A),
         ),
-        appBarTheme: AppBarTheme(
-          backgroundColor: Colors.red.shade900,
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF8B0000),
           foregroundColor: Colors.white,
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.red.shade800,
+            backgroundColor: const Color(0xFFCC0000),
             foregroundColor: Colors.white,
+            textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
         ),
         textTheme: const TextTheme(
-          bodyLarge: TextStyle(color: Colors.white),
-          bodyMedium: TextStyle(color: Colors.white70),
+          bodyLarge: TextStyle(color: Colors.white, fontSize: 16),
+          bodyMedium: TextStyle(color: Color(0xFFDDDDDD), fontSize: 14),
         ),
       ),
       initialRoute: '/',

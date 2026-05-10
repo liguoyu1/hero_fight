@@ -183,6 +183,44 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
     ).update;
   }
 
+  Widget _buildTutorialOverlay() {
+    return Positioned.fill(
+      child: GestureDetector(
+        onTap: () => setState(() => _game.tutorialOverlay.advance()),
+        child: Container(
+          color: Colors.black87,
+          child: Center(
+            child: Container(
+              width: MediaQuery.of(context).size.width * 0.65,
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: const Color(0xDD14142D),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xBB64B4FF)),
+              ),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Text(_game.tutorialOverlay.currentTitle,
+                    style: const TextStyle(color: Color(0xFF64C8FF), fontSize: 24, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 16),
+                const Text('Tap anywhere to continue', style: TextStyle(color: Colors.white54)),
+                const SizedBox(height: 16),
+                Row(mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(4, (i) => Container(
+                        width: 8, height: 8,
+                        margin: const EdgeInsets.symmetric(horizontal: 4),
+                        decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: i == _game.tutorialOverlay.currentStep
+                                ? const Color(0xFF64C8FF)
+                                : Colors.white24)))),
+              ]),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
@@ -398,6 +436,8 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                   ),
                 ),
               ),
+          // Tutorial overlay — always on top
+          if (_game.tutorialOverlay.isVisible) _buildTutorialOverlay(),
           ],
         ),
       ),

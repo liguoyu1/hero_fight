@@ -16,6 +16,9 @@ class TutorialOverlay extends PositionComponent with TapCallbacks {
   bool _visible = false;
   bool get isVisible => _visible;
 
+  int get currentStep => _step;
+  String get currentTitle => _step < _steps.length ? _steps[_step].title : '';
+
   int _step = 0; // 0-3: 四步引导
   static const int _totalSteps = 4;
 

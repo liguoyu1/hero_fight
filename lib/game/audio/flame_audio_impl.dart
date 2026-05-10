@@ -24,12 +24,12 @@ class SynthAudio {
         'sounds/attack.wav',
         'sounds/death.wav',
         'sounds/skill.wav',
-        'sounds/start.wav',
+        'sounds/round_start.wav',
         'sounds/win.wav',
-        'sounds/hit.wav',
-        'sounds/jump.wav',
+        'sounds/hurt.wav',
+        'sounds/freeze.wav',
       ]);
-      _hitPool = await FlameAudio.createPool('sounds/hit.wav', maxPlayers: 4);
+      _hitPool = await FlameAudio.createPool('sounds/hurt.wav', maxPlayers: 4);
       _heavyHitPool = await FlameAudio.createPool('sounds/attack.wav', maxPlayers: 3);
       _skillPool = await FlameAudio.createPool('sounds/skill.wav', maxPlayers: 3);
       _ready = true;
@@ -64,21 +64,21 @@ class SynthAudio {
   void playProjectile({double pitch = 1.0}) => _playPool(_skillPool);
 
   // ─── Hurt / Death ───
-  void playHurt({double pitch = 1.0}) => _playSound('sounds/hit.wav');
+  void playHurt({double pitch = 1.0}) => _playSound('sounds/hurt.wav');
   void playDeath() => _playSound('sounds/death.wav');
 
   // ─── Status effects ───
-  void playFreeze() => _playSound('sounds/skill.wav', volume: 0.3);
-  void playStun() => _playSound('sounds/hit.wav', volume: 0.2);
+  void playFreeze() => _playSound('sounds/freeze.wav', volume: 0.3);
+  void playStun() => _playSound('sounds/hurt.wav', volume: 0.2);
 
   // ─── Movement ───
-  void playJump() => _playSound('sounds/jump.wav', volume: 0.3);
-  void playLand() => _playSound('sounds/jump.wav', volume: 0.15);
+  void playJump() => _playSound('sounds/attack.wav', volume: 0.2);
+  void playLand() => _playSound('sounds/attack.wav', volume: 0.1);
 
   // ─── UI / Round ───
-  void playRoundStart() => _playSound('sounds/start.wav');
+  void playRoundStart() => _playSound('sounds/round_start.wav');
   void playWin() => _playSound('sounds/win.wav');
-  void playMenuSelect() => _playSound('sounds/hit.wav', volume: 0.15);
+  void playMenuSelect() => _playSound('sounds/hurt.wav', volume: 0.15);
 
   // ─── Hero-specific pitch mapping ───
   static double heroPitch(String heroId) {

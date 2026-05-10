@@ -65,7 +65,8 @@ class _MainMenuState extends State<MainMenuScreen> with TickerProviderStateMixin
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1A1A1A),
         title: Text(l10n.settings, style: const TextStyle(color: Colors.white)),
-        content: Column(
+        content: SingleChildScrollView(
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             SwitchListTile(
@@ -97,6 +98,7 @@ class _MainMenuState extends State<MainMenuScreen> with TickerProviderStateMixin
             const SizedBox(height: 8),
             Text(l10n.version, style: const TextStyle(color: Colors.white38, fontSize: 12)),
           ],
+        ),
         ),
         actions: [
           TextButton(

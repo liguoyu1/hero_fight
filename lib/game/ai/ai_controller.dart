@@ -114,13 +114,9 @@ class AiController {
       }
     }
 
-    // Priority 2: retreat when low HP (unless opponent is even lower)
-    if (hpRatio < _retreatHpThreshold && oppHpRatio > hpRatio) {
-      if (skillReady && _rng.nextDouble() < _comboChance) {
-        _currentAction = _AiAction.useSkill;
-        return;
-      }
-      _currentAction = _AiAction.retreat;
+    // Priority 2: skill ready + in range → use it
+    if (skillReady && dist < _approachRange && _rng.nextDouble() < _skillChance) {
+      _currentAction = _AiAction.useSkill;
       return;
     }
 

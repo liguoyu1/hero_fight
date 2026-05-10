@@ -60,6 +60,7 @@ class FighterGame extends FlameGame
   // Fighters
   late Fighter player1;
   late Fighter player2;
+  bool _gameReady = false;
 
   // Hero data (injected)
   final String hero1Id;
@@ -210,6 +211,7 @@ class FighterGame extends FlameGame
     } catch (_) {
       // Audio is non-critical
     }
+    _gameReady = true;
   }
 
   Fighter _createFighter(HeroData? hero, int index) {
@@ -290,12 +292,9 @@ class FighterGame extends FlameGame
   @override
   void onGameResize(Vector2 size) {
     super.onGameResize(size);
-    // Viewport components need screen-size updates for layout
     touchControls?.onGameResize(size);
     tutorialOverlay.onGameResize(size);
-
-    // Game world is fixed 1280×600 — Flame viewport auto-scales to fit screen.
-    // Fighter wrap bounds use the fixed stageWidth/stageHeight/groundY constants.
+    if (!_gameReady) return;
     if (player1.isLoaded) {
       player1.wrapMinX = wallLeft;
       player1.wrapMaxX = wallRight;
