@@ -53,9 +53,8 @@ const DISCONNECT_GRACE_PERIOD = 30000; // 30s grace period for reconnection
 
 // ======================== Module Imports ========================
 const roomMgr = require('./room-manager')({ MAX_PLAYERS, clients, wsById, rooms });
-const matchmaker = require('./matchmaker')({ matchmakingQueue, rooms, wsById, Room });
-
 const { Room, send, broadcast, getRoomList, removePlayerFromRoom, startCleanup } = roomMgr;
+const matchmaker = require('./matchmaker')({ matchmakingQueue, rooms, wsById, Room });
 const { removeFromMatchmakingQueue, tryMatchPlayers } = matchmaker;
 
 // ======================== HTTP API ========================
