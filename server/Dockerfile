@@ -17,6 +17,9 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY package.json ./
 COPY index.js ./
 COPY db.js ./
+COPY room-manager.js ./
+COPY matchmaker.js ./
+COPY public/ ./public/
 
 # Switch to non-root user
 USER appuser
